@@ -1,0 +1,135 @@
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// ─── Authentication & User Roles ───
+model User {
+  id           String      @id @default(uuid())
+  username     String      @unique
+  passwordHash String
+  name         String
+  role         String      @default("USER") // ADMIN, USER, SUPER_ADMIN
+  permissions  String[]    @default(["VIEW"]) // VIEW, EDIT, MANAGE_USERS
+  departmentId String?
+  department   Department? @relation(fields: [departmentId], references: [id])
+  documents    Document[]  @relation("DocumentUploader")
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+}
+
+// ─── Organization Structure ───
+model Department {
+  id           String        @id @default(uuid())
+  name         String        @unique
+  subDepts     String[]
+  theme        String?
+  users        User[]
+  projects     Project[]
+  documents    Document[]
+  transactions Transaction[]
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+}
+
+// ─── Document Registry ───
+model DocumentCategory {
+  id          String     @id @default(uuid())
+  name        String     @unique // The master categories e.g. 'ประเภทเอกสารโครงการ'
+  description String?
+  documents   Document[]
+}
+
+model Document {
+  id           String           @id @default(uuid())
+  docNo        String
+  name         String
+  filePath     String // S3 or local path for uploaded PDF
+  departmentId String?
+  department   Department?      @relation(fields: [departmentId], references: [id])
+  categoryId   String
+  category     DocumentCategory @relation(fields: [categoryId], references: [id])
+  uploadedById String
+  uploadedBy   User             @relation("DocumentUploader", fields: [uploadedById], references: [id])
+  projectId    String?
+  project      Project?         @relation(fields: [projectId], references: [id])
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+}
+
+model DocumentRequest {
+  id          String   @id @default(uuid())
+  requestType String
+  department  String
+  requestedBy String
+  status      String   @default("รอดำเนินการ")
+  fields      Json
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+
+// ─── Projects & Planning ───
+model AnnualPlan {
+  id          String    @id @default(uuid())
+  year        Int       @unique
+  thaiYear    Int       @unique
+  label       String
+  totalBudget Float     @default(0)
+  totalUsed   Float     @default(0)
+  projects    Project[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model Project {
+  id           String        @id @default(uuid())
+  name         String
+  departmentId String
+  department   Department    @relation(fields: [departmentId], references: [id])
+  subDepartment String?
+  projectType  String
+  lead         String
+  budget       Float         @default(0)
+  budgetUsed   Float         @default(0)
+  quarter      Int
+  status       String        @default("planned") // planned, in_progress, waiting_summary, completed, cancelled
+  startDate    String?
+  endDate      String?
+  description  String?
+  kpi          String?
+  targetPax    Int?
+  actualPax    Int?
+  months       Int[]         @default([])
+  completedMonths Int[]      @default([])
+  isStarted    Boolean       @default(false)
+  isUnplanned  Boolean       @default(false)
+  annualPlanId String
+  annualPlan   AnnualPlan    @relation(fields: [annualPlanId], references: [id])
+  transactions Transaction[]
+  documents    Document[]
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+}
+
+// ─── Finanical Tracking ───
+model Transaction {
+  id           String     @id @default(uuid())
+  date         String
+  title        String
+  type         String // income, expense
+  amount       Float
+  category     String?
+  docRef       String?
+  slipUrl      String?    // URL to the attached transfer slip
+  months       Int[]      @default([]) // Specific months this transaction applies to
+  departmentId String
+  department   Department @relation(fields: [departmentId], references: [id])
+  projectId    String?
+  project      Project?   @relation(fields: [projectId], references: [id])
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+}
