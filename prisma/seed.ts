@@ -92,30 +92,106 @@ async function main() {
     });
 
     // Seed Plans
+    const plan2567 = await prisma.annualPlan.create({
+        data: {
+            year: 2024,
+            thaiYear: 2567,
+            label: "แผนงานและโครงการประจำปี พ.ศ. 2567",
+            totalBudget: 400000,
+            totalUsed: 350000
+        }
+    });
+
+    const plan2568 = await prisma.annualPlan.create({
+        data: {
+            year: 2025,
+            thaiYear: 2568,
+            label: "แผนงานและโครงการประจำปี พ.ศ. 2568",
+            totalBudget: 450000,
+            totalUsed: 200000
+        }
+    });
+
     const plan2569 = await prisma.annualPlan.create({
         data: {
             year: 2026,
             thaiYear: 2569,
             label: "แผนงานและโครงการประจำปี พ.ศ. 2569",
             totalBudget: 480000,
-            totalUsed: 120000
+            totalUsed: 0
         }
     });
-    console.log("Plans created.");
+    console.log("Plans created (2567, 2568, 2569).");
 
-    // Seed Project
+    // Seed Projects for different years
     await prisma.project.create({
         data: {
-            name: "อบรมจิตอาสาชุมชน",
+            name: "ค่ายเยาวชนต้านภัยยาเสพติด (2567)",
+            departmentId: dept2.id,
+            projectType: "โครงการในแผน",
+            lead: "นายกสมาคมฯ",
+            budget: 50000,
+            quarter: 2,
+            annualPlanId: plan2567.id,
+            status: "completed"
+        }
+    });
+
+    await prisma.project.create({
+        data: {
+            name: "สัมมนาวิชาการสตรีมุสลิม (2568)",
+            departmentId: dept3.id,
+            projectType: "โครงการในแผน",
+            lead: "ผอ.สำนักสตรี",
+            budget: 30000,
+            quarter: 1,
+            annualPlanId: plan2568.id,
+            status: "in_progress"
+        }
+    });
+
+    const project2569 = await prisma.project.create({
+        data: {
+            name: "อบรมจิตอาสาชุมชน (2569)",
             departmentId: dept1.id,
             projectType: "โครงการในแผน",
             lead: "ผอ.สมชาย",
             budget: 10000,
             quarter: 1,
-            annualPlanId: plan2569.id
+            annualPlanId: plan2569.id,
+            status: "planned"
         }
     });
-    
+
+    // Seed Transactions with thaiYear
+    await prisma.transaction.create({
+        data: {
+            date: new Date('2024-05-10').toISOString(),
+            title: "งบจัดโครงการค่ายเยาวชน",
+            type: "expense",
+            amount: 50000,
+            category: "project",
+            departmentId: dept2.id,
+            projectId: null,
+            thaiYear: 2567
+        }
+    });
+
+    await prisma.transaction.create({
+        data: {
+            date: new Date('2025-02-15').toISOString(),
+            title: "ค่าวิทยากรสัมมนาสตรี",
+            type: "expense",
+            amount: 15000,
+            category: "project",
+            departmentId: dept3.id,
+            projectId: null,
+            thaiYear: 2568
+        }
+    });
+
+    console.log("Projects and Transactions seeded.");
+
     console.log("DB Seed Completed!");
 }
 

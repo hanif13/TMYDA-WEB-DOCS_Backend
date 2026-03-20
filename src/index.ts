@@ -13,6 +13,7 @@ import documentRoutes from './routes/document.routes';
 import documentRequestRoutes from './routes/documentRequest.routes';
 import projectRoutes from './routes/project.routes';
 import financeRoutes from './routes/finance.routes';
+import committeeRoutes from './routes/committee.routes';
 import departmentRoutes from './routes/department.routes';
 import authRoutes from './routes/auth.routes';
 import userRoutes from './routes/user.routes';
@@ -38,6 +39,7 @@ app.use('/api/documents', authenticateToken, documentRoutes);
 app.use('/api/document-requests', authenticateToken, documentRequestRoutes);
 app.use('/api/projects', authenticateToken, projectRoutes);
 app.use('/api/finance', authenticateToken, financeRoutes);
+app.use('/api/committee', authenticateToken, committeeRoutes);
 app.use('/api/departments', authenticateToken, departmentRoutes);
 
 // Basic Route for testing

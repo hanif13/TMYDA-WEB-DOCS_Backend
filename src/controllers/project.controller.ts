@@ -23,6 +23,26 @@ export const getAnnualPlans = async (req: Request, res: Response) => {
     }
 };
 
+export const getAnnualYears = async (req: Request, res: Response) => {
+    try {
+        const years = await prisma.annualPlan.findMany({
+            select: {
+                id: true,
+                year: true,
+                thaiYear: true,
+                label: true,
+                totalBudget: true,
+                totalUsed: true
+            },
+            orderBy: { year: 'desc' }
+        });
+        res.json(years);
+    } catch (error) {
+        console.error("Error fetching annual years:", error);
+        res.status(500).json({ error: "Failed to fetch annual years" });
+    }
+};
+
 export const createProject = async (req: Request, res: Response) => {
     try {
         const { name, departmentId, subDepartment, projectType, lead, budget, quarter, annualPlanId, months, isUnplanned } = req.body;
@@ -141,6 +161,9 @@ export const updateProject = async (req: Request, res: Response) => {
                 ...(targetPax !== undefined && { targetPax: Number(targetPax) }),
                 ...(actualPax !== undefined && { actualPax: Number(actualPax) }),
                 ...(isUnplanned !== undefined && { isUnplanned: Boolean(isUnplanned) }),
+                ...(req.files && Array.isArray(req.files) && req.files.length > 0 && {
+                    summaryImages: (req.files as Express.Multer.File[]).map(f => `/uploads/documents/${f.filename}`)
+                })
             },
             include: {
                 department: true
@@ -185,6 +208,30 @@ export const deleteProject = async (req: Request, res: Response) => {
         res.status(500).json({ error: "Failed to delete project" });
     }
 };
+export const updateAnnualPlan = async (req: Request, res: Response) => {
+    try {
+        const id = req.params.id as string;
+        const { year, thaiYear, label } = req.body;
+        
+        const updated = await prisma.annualPlan.update({
+            where: { id },
+            data: {
+                ...(year && { year: Number(year) }),
+                ...(thaiYear && { thaiYear: Number(thaiYear) }),
+                ...(label && { label })
+            }
+        });
+        
+        res.json(updated);
+    } catch (error: any) {
+        console.error("Error updating annual plan:", error);
+        if (error.code === 'P2002') {
+            return res.status(400).json({ error: "Year already exists" });
+        }
+        res.status(500).json({ error: "Failed to update annual plan" });
+    }
+};
+
 export const deleteAnnualPlan = async (req: Request, res: Response) => {
     try {
         const id = req.params.id as string;

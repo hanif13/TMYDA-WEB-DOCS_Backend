@@ -37,7 +37,7 @@ export const login = async (req: Request, res: Response) => {
                 permissions: user.permissions 
             },
             JWT_SECRET,
-            { expiresIn: '1d' }
+            { expiresIn: '7d' }
         );
 
         res.json({

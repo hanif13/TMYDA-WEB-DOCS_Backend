@@ -3,7 +3,12 @@ import { prisma } from '../lib/prisma';
 
 export const getTransactions = async (req: Request, res: Response) => {
     try {
+        const { year } = req.query;
+        const filter: any = {};
+        if (year) filter.thaiYear = Number(year);
+
         const transactions = await prisma.transaction.findMany({
+            where: filter,
             include: {
                 department: true,
                 project: true,
@@ -19,7 +24,10 @@ export const getTransactions = async (req: Request, res: Response) => {
 
 export const createTransaction = async (req: Request, res: Response) => {
     try {
-        const { date, title, type, amount, category, docRef, slipUrl, months, departmentId, projectId } = req.body;
+        const { date, title, type, amount, category, docRef, months, departmentId, projectId } = req.body;
+        
+        // Handle file upload for slip
+        const slipUrl = req.file ? `/uploads/documents/${req.file.filename}` : req.body.slipUrl;
 
         // Start a transaction to ensure data consistency
         const transaction = await prisma.$transaction(async (tx) => {
@@ -29,12 +37,13 @@ export const createTransaction = async (req: Request, res: Response) => {
                     title,
                     type, // 'income', 'expense', or 'refund'
                     amount: Number(amount),
-                    category,
+                    category: category || 'general',
                     docRef,
                     slipUrl,
-                    months: months || [],
+                    months: typeof months === 'string' ? JSON.parse(months) : (months || []),
                     departmentId,
                     projectId: projectId || null,
+                    thaiYear: req.body.thaiYear ? Number(req.body.thaiYear) : (req.body.year ? Number(req.body.year) : 2569)
                 },
                 include: {
                     department: true,

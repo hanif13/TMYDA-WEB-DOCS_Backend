@@ -31,6 +31,7 @@ model Department {
   projects     Project[]
   documents    Document[]
   transactions Transaction[]
+  committeeMembers CommitteeMember[]
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
 }
@@ -56,8 +57,11 @@ model Document {
   uploadedBy   User             @relation("DocumentUploader", fields: [uploadedById], references: [id])
   projectId    String?
   project      Project?         @relation(fields: [projectId], references: [id])
+  thaiYear     Int              @default(2569)
   createdAt    DateTime         @default(now())
   updatedAt    DateTime         @updatedAt
+
+  @@index([thaiYear])
 }
 
 model DocumentRequest {
@@ -103,10 +107,13 @@ model Project {
   kpi          String?
   targetPax    Int?
   actualPax    Int?
-  months       Int[]         @default([])
+  actualDate   String?
+  actualBudget Float?
+  months          Int[]      @default([])
   completedMonths Int[]      @default([])
-  isStarted    Boolean       @default(false)
-  isUnplanned  Boolean       @default(false)
+  summaryImages   String[]   @default([])
+  isStarted       Boolean    @default(false)
+  isUnplanned     Boolean    @default(false)
   annualPlanId String
   annualPlan   AnnualPlan    @relation(fields: [annualPlanId], references: [id])
   transactions Transaction[]
@@ -130,6 +137,27 @@ model Transaction {
   department   Department @relation(fields: [departmentId], references: [id])
   projectId    String?
   project      Project?   @relation(fields: [projectId], references: [id])
+  thaiYear     Int        @default(2569)
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
+
+  @@index([thaiYear])
+}
+
+model CommitteeMember {
+  id           String     @id @default(uuid())
+  name         String
+  position     String
+  phoneNumber  String?
+  email        String?
+  occupation   String?
+  photoUrl     String?
+  departmentId String
+  department   Department @relation(fields: [departmentId], references: [id])
+  order        Int        @default(0)
+  thaiYear     Int        @default(2569)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@index([thaiYear])
 }

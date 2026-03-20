@@ -3,7 +3,12 @@ import { prisma } from '../lib/prisma';
 
 export const getDocuments = async (req: Request, res: Response) => {
     try {
+        const { year } = req.query;
+        const filter: any = {};
+        if (year) filter.thaiYear = Number(year);
+
         const documents = await prisma.document.findMany({
+            where: filter,
             include: {
                 category: true,
                 department: true,
@@ -55,7 +60,8 @@ export const createDocument = async (req: Request, res: Response) => {
                 departmentId: realDeptId,
                 categoryId: realCatId,
                 uploadedById: realUploaderId,
-                filePath
+                filePath,
+                thaiYear: req.body.thaiYear ? Number(req.body.thaiYear) : (req.body.year ? Number(req.body.year) : 2569)
             },
             include: {
                 category: true,
