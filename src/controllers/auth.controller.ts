@@ -2,14 +2,16 @@ import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-
-const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-key-123';
+import { JWT_SECRET } from '../middleware/auth.middleware';
 
 export const login = async (req: Request, res: Response) => {
     try {
         const { username, password } = req.body;
         const normalizedUsername = username?.trim();
-        console.log(`Login attempt for: ${normalizedUsername}`);
+
+        if (!normalizedUsername || !password) {
+            return res.status(400).json({ error: 'กรุณากรอกชื่อผู้ใช้และรหัสผ่าน' });
+        }
 
         const user = await prisma.user.findUnique({
             where: { username: normalizedUsername },
@@ -17,13 +19,10 @@ export const login = async (req: Request, res: Response) => {
         });
 
         if (!user) {
-            console.log(`User not found: ${username}`);
             return res.status(401).json({ error: 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง' });
         }
 
-        console.log(`User found. Checking password...`);
         const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
-        console.log(`Password valid: ${isPasswordValid}`);
         
         if (!isPasswordValid) {
             return res.status(401).json({ error: 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง' });

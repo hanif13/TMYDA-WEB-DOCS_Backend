@@ -19,18 +19,29 @@ import authRoutes from './routes/auth.routes';
 import userRoutes from './routes/user.routes';
 import { authenticateToken } from './middleware/auth.middleware';
 
-// Middleware
-app.use(cors());
-app.use(express.json());
-app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
+// CORS — restrict to allowed origins only
+const allowedOrigins = (process.env.CORS_ORIGIN || 'http://localhost:3000')
+    .split(',')
+    .map(o => o.trim());
 
-// Request logger
-app.use((req, res, next) => {
-    console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
-    next();
-});
+app.use(cors({
+    origin: (origin, callback) => {
+        // Allow requests with no origin (mobile apps, Postman, server-to-server)
+        if (!origin || allowedOrigins.includes(origin)) {
+            callback(null, true);
+        } else {
+            callback(new Error('Not allowed by CORS'));
+        }
+    },
+    credentials: true
+}));
 
-// API Routes
+app.use(express.json({ limit: '10mb' }));
+
+// Protected static file serving — requires authentication
+app.use('/uploads', authenticateToken, express.static(path.join(process.cwd(), 'uploads')));
+
+// API Routes (public)
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 
@@ -42,17 +53,13 @@ app.use('/api/finance', authenticateToken, financeRoutes);
 app.use('/api/committee', authenticateToken, committeeRoutes);
 app.use('/api/departments', authenticateToken, departmentRoutes);
 
-// Basic Route for testing
+// Health check
 app.get('/', (req: Request, res: Response) => {
-    res.json({ message: 'Welcome to Fityatulhak API' });
+    res.json({ message: 'Fityatulhak API is running', status: 'ok' });
 });
 
 // Start the server
 app.listen(port, () => {
-    console.log(`Server is running on http://localhost:${port}`);
+    console.log(`🚀 Server is running on http://localhost:${port}`);
+    console.log(`🔒 CORS allowed origins: ${allowedOrigins.join(', ')}`);
 });
-
-// Graceful shutdown
-// process.on('beforeExit', async () => {
-//     await prisma.$disconnect();
-// });

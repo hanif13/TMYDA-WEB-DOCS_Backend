@@ -1,7 +1,14 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-key-123';
+// Enforce JWT_SECRET from environment — no fallback allowed
+if (!process.env.JWT_SECRET) {
+    console.error('❌ FATAL: JWT_SECRET is not set in environment variables. Server cannot start securely.');
+    process.exit(1);
+}
+const JWT_SECRET: string = process.env.JWT_SECRET;
+
+export { JWT_SECRET };
 
 export interface AuthRequest extends Request {
     user?: {
@@ -22,7 +29,6 @@ export const authenticateToken = (req: AuthRequest, res: Response, next: NextFun
 
     jwt.verify(token, JWT_SECRET, (err: any, user: any) => {
         if (err) {
-            console.error("[AUTH DEBUG] Token verification failed:", err.message);
             return res.status(403).json({ error: 'เซสชันหมดอายุหรือไม่มีสิทธิ์การเข้าถึง' });
         }
         req.user = user;
