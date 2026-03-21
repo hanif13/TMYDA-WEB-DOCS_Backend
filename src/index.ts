@@ -38,8 +38,8 @@ app.use(cors({
 
 app.use(express.json({ limit: '10mb' }));
 
-// Protected static file serving — requires authentication
-app.use('/uploads', authenticateToken, express.static(path.join(process.cwd(), 'uploads')));
+// Static file serving for uploads (public — img tags don't send JWT)
+app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
 // API Routes (public)
 app.use('/api/auth', authRoutes);
