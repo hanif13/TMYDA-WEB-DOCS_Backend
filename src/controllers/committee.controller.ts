@@ -68,3 +68,60 @@ export const deleteCommitteeMember = async (req: Request, res: Response) => {
         res.status(500).json({ error: "Failed to delete committee member" });
     }
 };
+
+export const updateCommitteeMember = async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+        const { name, position, phoneNumber, email, occupation, departmentId, order, thaiYear } = req.body;
+        
+        const dataToUpdate: any = {};
+        if (name !== undefined) dataToUpdate.name = name;
+        if (position !== undefined) dataToUpdate.position = position;
+        if (phoneNumber !== undefined) dataToUpdate.phoneNumber = phoneNumber;
+        if (email !== undefined) dataToUpdate.email = email;
+        if (occupation !== undefined) dataToUpdate.occupation = occupation;
+        if (departmentId !== undefined) dataToUpdate.departmentId = departmentId;
+        if (order !== undefined) dataToUpdate.order = Number(order);
+        if (thaiYear !== undefined) dataToUpdate.thaiYear = Number(thaiYear);
+        
+        if (req.file) {
+            dataToUpdate.photoUrl = `/uploads/documents/${req.file.filename}`;
+        }
+
+        const member = await (prisma as any).committeeMember.update({
+            where: { id },
+            data: dataToUpdate
+        });
+        res.json(member);
+    } catch (error) {
+        console.error("Error updating committee member:", error);
+        res.status(500).json({ error: "Failed to update committee member" });
+    }
+};
+
+export const createCommitteeBulk = async (req: Request, res: Response) => {
+    try {
+        const members = req.body;
+        if (!Array.isArray(members)) {
+            return res.status(400).json({ error: "Invalid data format. Expected an array." });
+        }
+        
+        const result = await (prisma as any).committeeMember.createMany({
+            data: members.map((m: any) => ({
+                name: m.name,
+                position: m.position,
+                phoneNumber: m.phoneNumber || "",
+                email: m.email || "",
+                occupation: m.occupation || "",
+                departmentId: m.departmentId || "admin",
+                order: Number(m.order) || 0,
+                thaiYear: Number(m.thaiYear) || 2567
+            }))
+        });
+
+        res.status(201).json({ message: "Imported successfully", count: result.count });
+    } catch (error) {
+        console.error("Error bulk creating committee members:", error);
+        res.status(500).json({ error: "Failed to import committee members" });
+    }
+};
