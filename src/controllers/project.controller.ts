@@ -122,7 +122,9 @@ export const updateProject = async (req: Request, res: Response) => {
             targetPax, 
             actualPax,
             isUnplanned,
-            completedMonths
+            completedMonths,
+            actualDate,
+            actualBudget
         } = req.body;
         
         // If budget is changing, we need to update the AnnualPlan totalBudget
@@ -160,6 +162,8 @@ export const updateProject = async (req: Request, res: Response) => {
                 ...(kpi !== undefined && { kpi }),
                 ...(targetPax !== undefined && { targetPax: Number(targetPax) }),
                 ...(actualPax !== undefined && { actualPax: Number(actualPax) }),
+                ...(actualDate !== undefined && { actualDate }),
+                ...(actualBudget !== undefined && { actualBudget: Number(actualBudget) }),
                 ...(isUnplanned !== undefined && { isUnplanned: Boolean(isUnplanned) }),
                 ...(req.files && Array.isArray(req.files) && req.files.length > 0 && {
                     summaryImages: (req.files as Express.Multer.File[]).map(f => `/uploads/documents/${f.filename}`)
@@ -246,5 +250,49 @@ export const deleteAnnualPlan = async (req: Request, res: Response) => {
     } catch (error) {
         console.error("Error deleting annual plan:", error);
         res.status(500).json({ error: "Failed to delete annual plan" });
+    }
+};
+
+export const createProjectBulk = async (req: Request, res: Response) => {
+    try {
+        const { projects, annualPlanId } = req.body;
+        if (!Array.isArray(projects) || !annualPlanId) {
+            return res.status(400).json({ error: "Invalid data format or missing annualPlanId." });
+        }
+        
+        let totalBudgetToAdd = 0;
+        
+        const mappedProjects = projects.map((p: any) => {
+            const budget = Number(p.budget) || 0;
+            totalBudgetToAdd += budget;
+            return {
+                name: p.name,
+                departmentId: p.departmentId || "admin",
+                subDepartment: p.subDepartment || "",
+                projectType: p.projectType || "general",
+                lead: p.lead || "",
+                budget,
+                quarter: Number(p.quarter) || 1,
+                annualPlanId,
+                months: Array.isArray(p.months) ? p.months : [],
+                isUnplanned: Boolean(p.isUnplanned),
+                isStarted: Boolean(p.isUnplanned),
+                status: p.isUnplanned ? 'in_progress' : 'planned',
+            };
+        });
+
+        const result = await prisma.project.createMany({
+            data: mappedProjects
+        });
+
+        await prisma.annualPlan.update({
+            where: { id: annualPlanId },
+            data: { totalBudget: { increment: totalBudgetToAdd } }
+        });
+
+        res.status(201).json({ message: "Imported successfully", count: result.count });
+    } catch (error) {
+        console.error("Error bulk creating projects:", error);
+        res.status(500).json({ error: "Failed to import projects" });
     }
 };
