@@ -1,0 +1,11 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const finance_controller_1 = require("../controllers/finance.controller");
+const auth_middleware_1 = require("../middleware/auth.middleware");
+const upload_1 = require("../middleware/upload");
+const router = (0, express_1.Router)();
+router.get('/', finance_controller_1.getTransactions);
+router.post('/', auth_middleware_1.authorizeAdmin, upload_1.upload.single('file'), finance_controller_1.createTransaction);
+router.delete('/:id', auth_middleware_1.authorizeAdmin, finance_controller_1.deleteTransaction);
+exports.default = router;

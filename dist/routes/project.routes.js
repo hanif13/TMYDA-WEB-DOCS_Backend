@@ -1,0 +1,17 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const project_controller_1 = require("../controllers/project.controller");
+const auth_middleware_1 = require("../middleware/auth.middleware");
+const upload_1 = require("../middleware/upload");
+const router = (0, express_1.Router)();
+router.get('/plans', project_controller_1.getAnnualPlans);
+router.get('/plans/years', project_controller_1.getAnnualYears);
+router.post('/plans', auth_middleware_1.authorizeAdmin, project_controller_1.createAnnualPlan);
+router.patch('/plans/:id', auth_middleware_1.authorizeAdmin, project_controller_1.updateAnnualPlan);
+router.delete('/plans/:id', auth_middleware_1.authorizeAdmin, project_controller_1.deleteAnnualPlan);
+router.post('/bulk', auth_middleware_1.authorizeAdmin, project_controller_1.createProjectBulk);
+router.post('/', auth_middleware_1.authorizeAdmin, project_controller_1.createProject);
+router.patch('/:id', auth_middleware_1.authorizeAdmin, upload_1.upload.array('images', 6), project_controller_1.updateProject);
+router.delete('/:id', auth_middleware_1.authorizeAdmin, project_controller_1.deleteProject);
+exports.default = router;
