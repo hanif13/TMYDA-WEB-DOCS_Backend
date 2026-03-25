@@ -1,45 +1,42 @@
-datasource db {
-  provider = "postgresql"
-}
-
 generator client {
   provider = "prisma-client-js"
 }
 
-// ─── Authentication & User Roles ───
+datasource db {
+  provider = "postgresql"
+}
+
 model User {
   id           String      @id @default(uuid())
   username     String      @unique
   passwordHash String
   name         String
-  role         String      @default("USER") // ADMIN, USER, SUPER_ADMIN
-  permissions  String[]    @default(["VIEW"]) // VIEW, EDIT, MANAGE_USERS
+  role         String      @default("USER")
+  permissions  String[]    @default(["VIEW"])
   departmentId String?
-  department   Department? @relation(fields: [departmentId], references: [id])
-  documents    Document[]  @relation("DocumentUploader")
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
+  documents    Document[]  @relation("DocumentUploader")
+  department   Department? @relation(fields: [departmentId], references: [id])
 }
 
-// ─── Organization Structure ───
 model Department {
-  id           String        @id @default(uuid())
-  name         String        @unique
-  subDepts     String[]
-  theme        String?
-  users        User[]
-  projects     Project[]
-  documents    Document[]
-  transactions Transaction[]
+  id               String            @id @default(uuid())
+  name             String            @unique
+  subDepts         String[]
+  theme            String?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
   committeeMembers CommitteeMember[]
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+  documents        Document[]
+  projects         Project[]
+  transactions     Transaction[]
+  users            User[]
 }
 
-// ─── Document Registry ───
 model DocumentCategory {
   id          String     @id @default(uuid())
-  name        String     @unique // The master categories e.g. 'ประเภทเอกสารโครงการ'
+  name        String     @unique
   description String?
   documents   Document[]
 }
@@ -48,18 +45,18 @@ model Document {
   id           String           @id @default(uuid())
   docNo        String
   name         String
-  filePath     String // S3 or local path for uploaded PDF
+  filePath     String
   departmentId String?
-  department   Department?      @relation(fields: [departmentId], references: [id])
   categoryId   String
-  category     DocumentCategory @relation(fields: [categoryId], references: [id])
   uploadedById String
-  uploadedBy   User             @relation("DocumentUploader", fields: [uploadedById], references: [id])
   projectId    String?
-  project      Project?         @relation(fields: [projectId], references: [id])
   thaiYear     Int              @default(2569)
   createdAt    DateTime         @default(now())
   updatedAt    DateTime         @updatedAt
+  category     DocumentCategory @relation(fields: [categoryId], references: [id])
+  department   Department?      @relation(fields: [departmentId], references: [id])
+  project      Project?         @relation(fields: [projectId], references: [id])
+  uploadedBy   User             @relation("DocumentUploader", fields: [uploadedById], references: [id])
 
   @@index([thaiYear])
 }
@@ -75,8 +72,6 @@ model DocumentRequest {
   updatedAt   DateTime @updatedAt
 }
 
-
-// ─── Projects & Planning ───
 model AnnualPlan {
   id          String    @id @default(uuid())
   year        Int       @unique
@@ -84,62 +79,61 @@ model AnnualPlan {
   label       String
   totalBudget Float     @default(0)
   totalUsed   Float     @default(0)
-  projects    Project[]
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
+  projects    Project[]
 }
 
 model Project {
-  id           String        @id @default(uuid())
-  name         String
-  departmentId String
-  department   Department    @relation(fields: [departmentId], references: [id])
-  subDepartment String?
-  projectType  String
-  lead         String
-  budget       Float         @default(0)
-  budgetUsed   Float         @default(0)
-  quarter      Int
-  status       String        @default("planned") // planned, in_progress, waiting_summary, completed, cancelled
-  startDate    String?
-  endDate      String?
-  description  String?
-  kpi          String?
-  targetPax    Int?
-  actualPax    Int?
-  actualDate   String?
-  actualBudget Float?
-  months          Int[]      @default([])
-  completedMonths Int[]      @default([])
-  summaryImages   String[]   @default([])
-  isStarted       Boolean    @default(false)
-  isUnplanned     Boolean    @default(false)
-  annualPlanId String
-  annualPlan   AnnualPlan    @relation(fields: [annualPlanId], references: [id])
-  transactions Transaction[]
-  documents    Document[]
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+  id              String        @id @default(uuid())
+  name            String
+  departmentId    String
+  subDepartment   String?
+  projectType     String
+  lead            String
+  budget          Float         @default(0)
+  budgetUsed      Float         @default(0)
+  quarter         Int
+  status          String        @default("planned")
+  startDate       String?
+  endDate         String?
+  description     String?
+  kpi             String?
+  targetPax       Int?
+  actualPax       Int?
+  months          Int[]         @default([])
+  completedMonths Int[]         @default([])
+  summaryImages   String[]      @default([])
+  isStarted       Boolean       @default(false)
+  isUnplanned     Boolean       @default(false)
+  annualPlanId    String
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  actualBudget    Float?
+  actualDate      String?
+  documents       Document[]
+  annualPlan      AnnualPlan    @relation(fields: [annualPlanId], references: [id])
+  department      Department    @relation(fields: [departmentId], references: [id])
+  transactions    Transaction[]
 }
 
-// ─── Finanical Tracking ───
 model Transaction {
   id           String     @id @default(uuid())
   date         String
   title        String
-  type         String // income, expense
+  type         String
   amount       Float
   category     String?
   docRef       String?
-  slipUrl      String?    // URL to the attached transfer slip
-  months       Int[]      @default([]) // Specific months this transaction applies to
+  slipUrl      String?
+  months       Int[]      @default([])
   departmentId String
-  department   Department @relation(fields: [departmentId], references: [id])
   projectId    String?
-  project      Project?   @relation(fields: [projectId], references: [id])
   thaiYear     Int        @default(2569)
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
+  department   Department @relation(fields: [departmentId], references: [id])
+  project      Project?   @relation(fields: [projectId], references: [id])
 
   @@index([thaiYear])
 }
@@ -153,11 +147,11 @@ model CommitteeMember {
   occupation   String?
   photoUrl     String?
   departmentId String
-  department   Department @relation(fields: [departmentId], references: [id])
   order        Int        @default(0)
-  thaiYear     Int        @default(2569)
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
+  thaiYear     Int        @default(2569)
+  department   Department @relation(fields: [departmentId], references: [id])
 
   @@index([thaiYear])
 }

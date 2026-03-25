@@ -87,6 +87,9 @@ async function main() {
     const catInternal = await prisma.documentCategory.create({
         data: { name: "ประเภทเอกสารภายใน" }
     });
+    const catOrder = await prisma.documentCategory.create({
+        data: { name: "ประเภทเอกสารประกาศหรือคำสั่ง" }
+    });
     const catExternal = await prisma.documentCategory.create({
         data: { name: "ประเภทเอกสารภายนอก" }
     });
