@@ -68,8 +68,12 @@ model DocumentRequest {
   requestedBy String
   status      String   @default("รอดำเนินการ")
   fields      Json
+  pdfPath     String?
+  thaiYear    Int      @default(2567)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  @@index([thaiYear])
 }
 
 model AnnualPlan {

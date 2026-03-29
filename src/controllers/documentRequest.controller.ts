@@ -3,26 +3,39 @@ import { prisma } from '../lib/prisma';
 
 export const getDocumentRequests = async (req: Request, res: Response) => {
     try {
+        const { year } = req.query;
+        console.log("Fetching document requests for year:", year);
+        const where: any = {};
+        if (year && !isNaN(parseInt(year as string))) {
+            where.thaiYear = parseInt(year as string);
+        }
+
+        console.log("Query where clause:", JSON.stringify(where));
+        
         const requests = await prisma.documentRequest.findMany({
+            where,
             orderBy: { createdAt: 'desc' }
         });
+        
+        console.log(`Found ${requests.length} requests`);
         res.json(requests);
     } catch (error) {
-        console.error("Error fetching document requests:", error);
-        res.status(500).json({ error: "Failed to fetch document requests" });
+        console.error("DETAILED ERROR Fetching document requests:", error);
+        res.status(500).json({ error: "Failed to fetch document requests", details: error instanceof Error ? error.message : String(error) });
     }
 };
 
 export const createDocumentRequest = async (req: Request, res: Response) => {
     try {
-        const { requestType, department, requestedBy, fields } = req.body;
+        const { requestType, department, requestedBy, fields, thaiYear } = req.body;
         
         const newRequest = await prisma.documentRequest.create({
             data: {
                 requestType,
                 department,
                 requestedBy,
-                fields: fields || {}
+                fields: fields || {},
+                ...(thaiYear && { thaiYear: parseInt(thaiYear as string) })
             }
         });
         

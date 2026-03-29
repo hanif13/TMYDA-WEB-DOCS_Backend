@@ -62,4 +62,9 @@ app.get('/', (req: Request, res: Response) => {
 app.listen(port, () => {
     console.log(`🚀 Server is running on http://localhost:${port}`);
     console.log(`🔒 CORS allowed origins: ${allowedOrigins.join(', ')}`);
+    
+    // Heartbeat to keep process alive and debug exits
+    setInterval(() => {
+        console.log(`[${new Date().toISOString()}] Server heartbeat - Port: ${port}`);
+    }, 10000);
 });
