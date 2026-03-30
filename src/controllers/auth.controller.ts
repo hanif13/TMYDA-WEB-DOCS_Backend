@@ -51,6 +51,7 @@ export const login = async (req: Request, res: Response) => {
             }
         });
     } catch (error) {
+        console.error('Login error details:', error);
         res.status(500).json({ error: 'เกิดข้อผิดพลาดในการเข้าสู่ระบบ' });
     }
 };
