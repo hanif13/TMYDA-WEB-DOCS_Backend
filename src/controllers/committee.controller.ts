@@ -1,5 +1,7 @@
 import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
+import { uploadToSupabase } from '../lib/supabase';
+import path from 'path';
 
 export const getCommitteeMembers = async (req: Request, res: Response) => {
     try {
@@ -34,7 +36,12 @@ export const getCommitteeMembers = async (req: Request, res: Response) => {
 export const createCommitteeMember = async (req: Request, res: Response) => {
     try {
         const { name, position, phoneNumber, email, occupation, departmentId, order, thaiYear } = req.body;
-        const photoUrl = req.file ? `/uploads/documents/${req.file.filename}` : "";
+        let photoUrl = "";
+        if (req.file) {
+            const fileExt = path.extname(req.file.originalname);
+            const fileName = `comm-${Date.now()}-${Math.round(Math.random() * 1e9)}${fileExt}`;
+            photoUrl = await uploadToSupabase('uploads', `committee/${fileName}`, req.file.buffer, req.file.mimetype);
+        }
 
         const member = await (prisma as any).committeeMember.create({
             data: {
@@ -85,7 +92,9 @@ export const updateCommitteeMember = async (req: Request, res: Response) => {
         if (thaiYear !== undefined) dataToUpdate.thaiYear = Number(thaiYear);
         
         if (req.file) {
-            dataToUpdate.photoUrl = `/uploads/documents/${req.file.filename}`;
+            const fileExt = path.extname(req.file.originalname);
+            const fileName = `comm-${Date.now()}-${Math.round(Math.random() * 1e9)}${fileExt}`;
+            dataToUpdate.photoUrl = await uploadToSupabase('uploads', `committee/${fileName}`, req.file.buffer, req.file.mimetype);
         }
 
         const member = await (prisma as any).committeeMember.update({

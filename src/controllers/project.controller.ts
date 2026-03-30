@@ -1,5 +1,7 @@
 import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
+import { uploadToSupabase } from '../lib/supabase';
+import path from 'path';
 
 export const getAnnualPlans = async (req: Request, res: Response) => {
     try {
@@ -166,7 +168,11 @@ export const updateProject = async (req: Request, res: Response) => {
                 ...(actualBudget !== undefined && { actualBudget: Number(actualBudget) }),
                 ...(isUnplanned !== undefined && { isUnplanned: Boolean(isUnplanned) }),
                 ...(req.files && Array.isArray(req.files) && req.files.length > 0 && {
-                    summaryImages: (req.files as Express.Multer.File[]).map(f => `/uploads/documents/${f.filename}`)
+                    summaryImages: await Promise.all((req.files as Express.Multer.File[]).map(async (file) => {
+                        const fileExt = path.extname(file.originalname);
+                        const fileName = `prj-${Date.now()}-${Math.round(Math.random() * 1e9)}${fileExt}`;
+                        return await uploadToSupabase('uploads', `projects/${fileName}`, file.buffer, file.mimetype);
+                    }))
                 })
             },
             include: {

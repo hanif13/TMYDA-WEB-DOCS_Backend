@@ -1,5 +1,7 @@
 import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
+import { uploadToSupabase } from '../lib/supabase';
+import path from 'path';
 
 export const getTransactions = async (req: Request, res: Response) => {
     try {
@@ -26,8 +28,13 @@ export const createTransaction = async (req: Request, res: Response) => {
     try {
         const { date, title, type, amount, category, docRef, months, departmentId, projectId } = req.body;
         
-        // Handle file upload for slip
-        const slipUrl = req.file ? `/uploads/documents/${req.file.filename}` : req.body.slipUrl;
+        // Handle file upload for slip to Supabase
+        let slipUrl = req.body.slipUrl;
+        if (req.file) {
+            const fileExt = path.extname(req.file.originalname);
+            const fileName = `slip-${Date.now()}-${Math.round(Math.random() * 1e9)}${fileExt}`;
+            slipUrl = await uploadToSupabase('uploads', `slips/${fileName}`, req.file.buffer, req.file.mimetype);
+        }
 
         // Start a transaction to ensure data consistency
         const transaction = await prisma.$transaction(async (tx) => {

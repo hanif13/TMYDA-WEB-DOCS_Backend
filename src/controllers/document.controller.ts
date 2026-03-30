@@ -1,5 +1,7 @@
 import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
+import { uploadToSupabase } from '../lib/supabase';
+import path from 'path';
 
 export const getDocuments = async (req: Request, res: Response) => {
     try {
@@ -50,8 +52,13 @@ export const createDocument = async (req: Request, res: Response) => {
             if (user) realUploaderId = user.id;
         }
         
-        // The file path will be relative to the server for static serving
-        const filePath = req.file ? `/uploads/documents/${req.file.filename}` : "";
+        // Upload to Supabase instead of local disk
+        let filePath = "";
+        if (req.file) {
+            const fileExt = path.extname(req.file.originalname);
+            const fileName = `doc-${Date.now()}-${Math.round(Math.random() * 1e9)}${fileExt}`;
+            filePath = await uploadToSupabase('uploads', `documents/${fileName}`, req.file.buffer, req.file.mimetype);
+        }
         
         const newDoc = await prisma.document.create({
             data: {
@@ -127,7 +134,9 @@ export const updateDocument = async (req: Request, res: Response) => {
         }
         
         if (req.file) {
-            updateData.filePath = `/uploads/documents/${req.file.filename}`;
+            const fileExt = path.extname(req.file.originalname);
+            const fileName = `doc-${Date.now()}-${Math.round(Math.random() * 1e9)}${fileExt}`;
+            updateData.filePath = await uploadToSupabase('uploads', `documents/${fileName}`, req.file.buffer, req.file.mimetype);
         }
         
         const updatedDoc = await prisma.document.update({
