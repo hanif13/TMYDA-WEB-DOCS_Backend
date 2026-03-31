@@ -105,7 +105,7 @@ export const updateDocument = async (req: Request, res: Response) => {
         const id = req.params.id as string;
         const { docNo, name, departmentId, categoryId, uploadedById } = req.body;
         
-        const isUUID = (str: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
+        const isUUID = (str: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
 
         let updateData: any = {};
         if (docNo) updateData.docNo = docNo;
@@ -164,5 +164,17 @@ export const deleteDocument = async (req: Request, res: Response) => {
     } catch (error) {
         console.error("Error deleting document:", error);
         res.status(500).json({ error: "Failed to delete document" });
+    }
+};
+
+export const getDocumentCategories = async (req: Request, res: Response) => {
+    try {
+        const categories = await prisma.documentCategory.findMany({
+            orderBy: { name: 'asc' }
+        });
+        res.json(categories);
+    } catch (error) {
+        console.error("Error fetching categories:", error);
+        res.status(500).json({ error: "Failed to fetch categories" });
     }
 };
