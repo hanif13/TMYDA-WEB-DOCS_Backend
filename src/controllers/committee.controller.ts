@@ -1,136 +1,143 @@
-import { Request, Response } from 'express';
-import { prisma } from '../lib/prisma';
+import { Context } from 'hono';
+import { getPrisma } from '../lib/prisma';
 import { uploadToSupabase } from '../lib/supabase';
-import path from 'path';
+import { Bindings, Variables } from '../middleware/auth.middleware';
 
-export const getCommitteeMembers = async (req: Request, res: Response) => {
+export const getCommitteeMembers = async (c: Context<{ Bindings: Bindings, Variables: Variables }>) => {
     try {
-        const { year } = req.query;
-        const where: any = {};
-        
-        if (year && !isNaN(parseInt(year as string))) {
-            where.thaiYear = parseInt(year as string);
-        }
-
-        const members = await (prisma as any).committeeMember.findMany({
-            where,
-            include: {
-                department: true
-            },
-            orderBy: [
-                { departmentId: 'asc' },
-                { order: 'asc' }
-            ]
+        const prisma = getPrisma(c.env.DATABASE_URL);
+        const members = await prisma.committeeMember.findMany({
+            include: { department: true },
+            orderBy: { order: 'asc' }
         });
-        res.json(members);
-    } catch (error: any) {
-        console.error("DEBUG - Error fetching committee members:", error);
-        res.status(500).json({ 
-            error: "Failed to fetch committee members", 
-            details: error.message,
-            stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
-        });
+        return c.json(members);
+    } catch (error) {
+        console.error("Error fetching committee members:", error);
+        return c.json({ error: "Failed to fetch committee members" }, 500);
     }
 };
 
-export const createCommitteeMember = async (req: Request, res: Response) => {
+export const createCommitteeMember = async (c: Context<{ Bindings: Bindings, Variables: Variables }>) => {
     try {
-        const { name, position, phoneNumber, email, occupation, departmentId, order, thaiYear } = req.body;
+        const formData = await c.req.formData();
+        const prisma = getPrisma(c.env.DATABASE_URL);
+        
+        const name = formData.get('name') as string;
+        const position = formData.get('position') as string || formData.get('role') as string;
+        const departmentId = formData.get('departmentId') as string;
+        const phone = formData.get('phoneNumber') as string;
+        const email = formData.get('email') as string;
+        const occupation = formData.get('occupation') as string;
+        const order = formData.get('order') as string;
+        const file = formData.get('image') as File || formData.get('photo') as File;
+
         let photoUrl = "";
-        if (req.file) {
-            const fileExt = path.extname(req.file.originalname);
-            const fileName = `comm-${Date.now()}-${Math.round(Math.random() * 1e9)}${fileExt}`;
-            photoUrl = await uploadToSupabase('uploads', `committee/${fileName}`, req.file.buffer, req.file.mimetype);
+        if (file && file.size > 0) {
+            const fileName = `comm-${Date.now()}-${Math.round(Math.random() * 1e9)}-${file.name}`;
+            const buffer = await file.arrayBuffer();
+            photoUrl = await uploadToSupabase('uploads', `committees/${fileName}`, new Uint8Array(buffer), file.type, c.env);
         }
 
-        const member = await (prisma as any).committeeMember.create({
+        const newMember = await prisma.committeeMember.create({
             data: {
                 name,
-                position,
-                phoneNumber,
-                email,
-                occupation,
-                photoUrl,
+                position: position || "",
                 departmentId,
-                order: Number(order) || 0,
-                thaiYear: Number(thaiYear) || 2569
-            }
+                phoneNumber: phone || null,
+                email: email || null,
+                occupation: occupation || null,
+                order: order ? parseInt(order) : 0,
+                photoUrl
+            },
+            include: { department: true }
         });
-        res.status(201).json(member);
+        
+        return c.json(newMember, 201);
     } catch (error) {
         console.error("Error creating committee member:", error);
-        res.status(500).json({ error: "Failed to create committee member" });
+        return c.json({ error: "Failed to create committee member" }, 500);
     }
 };
 
-export const deleteCommitteeMember = async (req: Request, res: Response) => {
+export const updateCommitteeMember = async (c: Context<{ Bindings: Bindings, Variables: Variables }>) => {
     try {
-        const { id } = req.params;
-        await (prisma as any).committeeMember.delete({
-            where: { id }
-        });
-        res.status(204).send();
-    } catch (error) {
-        console.error("Error deleting committee member:", error);
-        res.status(500).json({ error: "Failed to delete committee member" });
-    }
-};
+        const id = c.req.param('id');
+        const formData = await c.req.formData();
+        const prisma = getPrisma(c.env.DATABASE_URL);
+        
+        const name = formData.get('name') as string;
+        const position = formData.get('position') as string || formData.get('role') as string;
+        const departmentId = formData.get('departmentId') as string;
+        const phone = formData.get('phoneNumber') as string;
+        const email = formData.get('email') as string;
+        const occupation = formData.get('occupation') as string;
+        const order = formData.get('order') as string;
+        const file = formData.get('image') as File || formData.get('photo') as File;
 
-export const updateCommitteeMember = async (req: Request, res: Response) => {
-    try {
-        const { id } = req.params;
-        const { name, position, phoneNumber, email, occupation, departmentId, order, thaiYear } = req.body;
-        
-        const dataToUpdate: any = {};
-        if (name !== undefined) dataToUpdate.name = name;
-        if (position !== undefined) dataToUpdate.position = position;
-        if (phoneNumber !== undefined) dataToUpdate.phoneNumber = phoneNumber;
-        if (email !== undefined) dataToUpdate.email = email;
-        if (occupation !== undefined) dataToUpdate.occupation = occupation;
-        if (departmentId !== undefined) dataToUpdate.departmentId = departmentId;
-        if (order !== undefined) dataToUpdate.order = Number(order);
-        if (thaiYear !== undefined) dataToUpdate.thaiYear = Number(thaiYear);
-        
-        if (req.file) {
-            const fileExt = path.extname(req.file.originalname);
-            const fileName = `comm-${Date.now()}-${Math.round(Math.random() * 1e9)}${fileExt}`;
-            dataToUpdate.photoUrl = await uploadToSupabase('uploads', `committee/${fileName}`, req.file.buffer, req.file.mimetype);
+        let updateData: any = {};
+        if (name) updateData.name = name;
+        if (position) updateData.position = position;
+        if (departmentId) updateData.departmentId = departmentId;
+        if (phone !== undefined) updateData.phoneNumber = phone;
+        if (email !== undefined) updateData.email = email;
+        if (occupation !== undefined) updateData.occupation = occupation;
+        if (order !== undefined) updateData.order = parseInt(order);
+
+        if (file && file.size > 0) {
+            const fileName = `comm-${Date.now()}-${Math.round(Math.random() * 1e9)}-${file.name}`;
+            const buffer = await file.arrayBuffer();
+            updateData.photoUrl = await uploadToSupabase('uploads', `committees/${fileName}`, new Uint8Array(buffer), file.type, c.env);
         }
 
-        const member = await (prisma as any).committeeMember.update({
+        const updatedMember = await prisma.committeeMember.update({
             where: { id },
-            data: dataToUpdate
+            data: updateData,
+            include: { department: true }
         });
-        res.json(member);
+        
+        return c.json(updatedMember);
     } catch (error) {
         console.error("Error updating committee member:", error);
-        res.status(500).json({ error: "Failed to update committee member" });
+        return c.json({ error: "Failed to update committee member" }, 500);
     }
 };
 
-export const createCommitteeBulk = async (req: Request, res: Response) => {
+export const deleteCommitteeMember = async (c: Context<{ Bindings: Bindings, Variables: Variables }>) => {
     try {
-        const members = req.body;
-        if (!Array.isArray(members)) {
-            return res.status(400).json({ error: "Invalid data format. Expected an array." });
-        }
+        const id = c.req.param('id');
+        const prisma = getPrisma(c.env.DATABASE_URL);
+        await prisma.committeeMember.delete({ where: { id } });
+        return c.body(null, 204);
+    } catch (error) {
+        console.error("Error deleting committee member:", error);
+        return c.json({ error: "Failed to delete committee member" }, 500);
+    }
+};
+
+export const createCommitteeBulk = async (c: Context<{ Bindings: Bindings, Variables: Variables }>) => {
+    try {
+        const { committees } = await c.req.json();
+        const prisma = getPrisma(c.env.DATABASE_URL);
         
-        const result = await (prisma as any).committeeMember.createMany({
-            data: members.map((m: any) => ({
-                name: m.name,
-                position: m.position,
-                phoneNumber: m.phoneNumber || "",
-                email: m.email || "",
-                occupation: m.occupation || "",
-                departmentId: m.departmentId || "admin",
-                order: Number(m.order) || 0,
-                thaiYear: Number(m.thaiYear) || 2567
+        if (!Array.isArray(committees)) {
+            return c.json({ error: "Invalid data format" }, 400);
+        }
+
+        const result = await prisma.committeeMember.createMany({
+            data: committees.map((comm: any) => ({
+                name: comm.name,
+                position: comm.position || comm.role || "",
+                departmentId: comm.departmentId,
+                phoneNumber: comm.phoneNumber || null,
+                email: comm.email || null,
+                photoUrl: comm.photoUrl || comm.imageUrl || "",
+                order: comm.order || 0
             }))
         });
 
-        res.status(201).json({ message: "Imported successfully", count: result.count });
+        return c.json({ message: "Imported successfully", count: result.count }, 201);
     } catch (error) {
         console.error("Error bulk creating committee members:", error);
-        res.status(500).json({ error: "Failed to import committee members" });
+        return c.json({ error: "Failed to import committee members" }, 500);
     }
 };

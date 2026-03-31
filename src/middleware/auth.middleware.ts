@@ -1,53 +1,63 @@
-import { Request, Response, NextFunction } from 'express';
+import { Context, Next } from 'hono';
 import jwt from 'jsonwebtoken';
 
-// Enforce JWT_SECRET from environment — no fallback allowed
-if (!process.env.JWT_SECRET) {
-    console.error('❌ FATAL: JWT_SECRET is not set in environment variables. Server cannot start securely.');
-    process.exit(1);
-}
-const JWT_SECRET: string = process.env.JWT_SECRET;
+// Types for Hono context
+export type Bindings = {
+    DATABASE_URL: string;
+    JWT_SECRET: string;
+    CORS_ORIGIN: string;
+    SUPABASE_URL: string;
+    SUPABASE_ANON_KEY: string;
+    SUPABASE_SERVICE_ROLE_KEY: string;
+};
 
-export { JWT_SECRET };
-
-export interface AuthRequest extends Request {
+export type Variables = {
     user?: {
         userId: string;
         username: string;
         role: string;
         permissions: string[];
     };
-}
+};
 
-export const authenticateToken = (req: AuthRequest, res: Response, next: NextFunction) => {
-    const authHeader = req.headers['authorization'];
+export const authenticateToken = async (c: Context<{ Bindings: Bindings, Variables: Variables }>, next: Next) => {
+    const authHeader = c.req.header('authorization');
     const token = authHeader && authHeader.split(' ')[1];
 
     if (!token) {
-        return res.status(401).json({ error: 'กรุณาเข้าสู่ระบบก่อนดำเนินการ' });
+        return c.json({ error: 'กรุณาเข้าสู่ระบบก่อนดำเนินการ' }, 401);
     }
 
-    jwt.verify(token, JWT_SECRET, (err: any, user: any) => {
-        if (err) {
-            return res.status(403).json({ error: 'เซสชันหมดอายุหรือไม่มีสิทธิ์การเข้าถึง' });
+    try {
+        const secret = c.env.JWT_SECRET;
+        if (!secret) {
+            console.error('❌ JWT_SECRET is not set in environment.');
+            return c.json({ error: 'เซิร์ฟเวอร์ยังไม่พร้อมใช้งาน' }, 500);
         }
-        req.user = user;
-        next();
-    });
+
+        const decoded = jwt.verify(token, secret) as any;
+        c.set('user', decoded);
+        await next();
+    } catch (err) {
+        console.error('JWT verification error:', err);
+        return c.json({ error: 'เซสชันหมดอายุหรือไม่มีสิทธิ์การเข้าถึง' }, 403);
+    }
 };
 
-export const authorizeAdmin = (req: AuthRequest, res: Response, next: NextFunction) => {
-    if (req.user?.role !== 'ADMIN' && req.user?.role !== 'SUPER_ADMIN') {
-        return res.status(403).json({ error: 'คุณไม่มีสิทธิ์ในการดำเนินการนี้ (Admin Only)' });
+export const authorizeAdmin = async (c: Context<{ Bindings: Bindings, Variables: Variables }>, next: Next) => {
+    const user = c.get('user');
+    if (user?.role !== 'ADMIN' && user?.role !== 'SUPER_ADMIN') {
+        return c.json({ error: 'คุณไม่มีสิทธิ์ในการดำเนินการนี้ (Admin Only)' }, 403);
     }
-    next();
+    await next();
 };
 
 export const authorizePermission = (permission: string) => {
-    return (req: AuthRequest, res: Response, next: NextFunction) => {
-        if (!req.user?.permissions.includes(permission) && req.user?.role !== 'SUPER_ADMIN') {
-            return res.status(403).json({ error: `คุณไม่มีสิทธิ์ในการเข้าถึง (${permission})` });
+    return async (c: Context<{ Bindings: Bindings, Variables: Variables }>, next: Next) => {
+        const user = c.get('user');
+        if (!user?.permissions.includes(permission) && user?.role !== 'SUPER_ADMIN') {
+            return c.json({ error: `คุณไม่มีสิทธิ์ในการเข้าถึง (${permission})` }, 403);
         }
-        next();
+        await next();
     };
 };

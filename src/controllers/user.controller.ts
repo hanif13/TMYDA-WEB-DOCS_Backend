@@ -1,109 +1,124 @@
-import { Request, Response } from 'express';
-import { prisma } from '../lib/prisma';
+import { Context } from 'hono';
+import { getPrisma } from '../lib/prisma';
 import bcrypt from 'bcryptjs';
+import { Bindings, Variables } from '../middleware/auth.middleware';
 
-export const getUsers = async (req: Request, res: Response) => {
+export const getUsers = async (c: Context<{ Bindings: Bindings, Variables: Variables }>) => {
     try {
+        const prisma = getPrisma(c.env.DATABASE_URL);
         const users = await prisma.user.findMany({
             include: { department: true },
             orderBy: { createdAt: 'desc' }
         });
-        
-        // Remove passwordHash before sending
-        const safeUsers = users.map(({ passwordHash, ...user }) => user);
-        res.json(safeUsers);
+        return c.json(users);
     } catch (error) {
-        res.status(500).json({ error: 'ไม่สามารถดึงข้อมูลผู้ใช้ได้' });
+        console.error("Error fetching users:", error);
+        return c.json({ error: "Failed to fetch users" }, 500);
     }
 };
 
-export const createUser = async (req: Request, res: Response) => {
+export const createUser = async (c: Context<{ Bindings: Bindings, Variables: Variables }>) => {
     try {
-        const { username, password, name, role, permissions, departmentId } = req.body;
-
-        const existingUser = await prisma.user.findUnique({ where: { username } });
-        if (existingUser) {
-            return res.status(400).json({ error: 'ชื่อผู้ใช้นี้มีอยู่ในระบบแล้ว' });
+        const { username, password, role, name, department } = await c.req.json();
+        const prisma = getPrisma(c.env.DATABASE_URL);
+        
+        let departmentId = department;
+        if (department && department.length > 10) {
+             // likely already an ID
+        } else if (department) {
+            const dept = await prisma.department.findUnique({ where: { name: department } });
+            if (dept) departmentId = dept.id;
         }
 
-        const passwordHash = await bcrypt.hash(password, 10);
-
+        const passwordHash = password ? await bcrypt.hash(password, 10) : await bcrypt.hash('123456', 10);
+        
         const newUser = await prisma.user.create({
             data: {
                 username,
                 passwordHash,
-                name,
-                role: (role as string) || 'USER',
-                permissions: (permissions as string[]) || ['VIEW'],
-                departmentId
-            }
+                role: role || 'USER',
+                name: name || username,
+                departmentId: departmentId || null,
+                permissions: role === 'SUPER_ADMIN' ? ['all'] : ['VIEW']
+            },
+            include: { department: true }
         });
-
-        const { passwordHash: _, ...safeUser } = newUser;
-        res.status(201).json(safeUser);
+        
+        return c.json(newUser, 201);
     } catch (error) {
-        res.status(500).json({ error: 'ไม่สามารถสร้างผู้ใช้ได้' });
+        console.error("Error creating user:", error);
+        return c.json({ error: "Failed to create user" }, 500);
     }
 };
 
-export const updatePermissions = async (req: Request, res: Response) => {
+export const updateUser = async (c: Context<{ Bindings: Bindings, Variables: Variables }>) => {
     try {
-        const { id } = req.params;
-        const { permissions, role } = req.body;
-
-        const updatedUser = await prisma.user.update({
-            where: { id: id as string },
-            data: { 
-                permissions: permissions as string[], 
-                role: role as string 
+        const id = c.req.param('id');
+        const { username, password, role, name, department } = await c.req.json();
+        const prisma = getPrisma(c.env.DATABASE_URL);
+        
+        let updateData: any = {};
+        if (username) updateData.username = username;
+        if (role) updateData.role = role;
+        if (name) updateData.name = name;
+        
+        if (department) {
+            if (department.length > 10) {
+                updateData.departmentId = department;
+            } else {
+                const dept = await prisma.department.findUnique({ where: { name: department } });
+                if (dept) updateData.departmentId = dept.id;
             }
-        });
-
-        const { passwordHash, ...safeUser } = updatedUser;
-        res.json(safeUser);
-    } catch (error) {
-        res.status(500).json({ error: 'ไม่สามารถอัปเดตสิทธิ์ได้' });
-    }
-};
-
-export const updateUser = async (req: Request, res: Response) => {
-    try {
-        const { id } = req.params;
-        const { username, name, role, permissions, departmentId, password } = req.body;
-
-        const data: any = {
-            username,
-            name,
-            role,
-            permissions,
-            departmentId
-        };
+        }
 
         if (password) {
-            data.passwordHash = await bcrypt.hash(password, 10);
+            updateData.passwordHash = await bcrypt.hash(password, 10);
         }
 
         const updatedUser = await prisma.user.update({
-            where: { id: id as string },
-            data
+            where: { id },
+            data: updateData,
+            include: { department: true }
         });
-
-        const { passwordHash, ...safeUser } = updatedUser;
-        res.json(safeUser);
+        
+        return c.json(updatedUser);
     } catch (error) {
-        res.status(500).json({ error: 'ไม่สามารถอัปเดตข้อมูลผู้ใช้ได้' });
+        console.error("Error updating user:", error);
+        return c.json({ error: "Failed to update user" }, 500);
     }
 };
 
-export const deleteUser = async (req: Request, res: Response) => {
+export const deleteUser = async (c: Context<{ Bindings: Bindings, Variables: Variables }>) => {
     try {
-        const { id } = req.params;
-        
-        // Prevent deleting self? or strictly super-admin can delete anyone?
-        // For simplicity, just delete.
-        await prisma.user.delete({ where: { id: id as string } });
-        res.json({ message: 'ลบผู้ใช้สำเร็จ' });
+        const id = c.req.param('id');
+        const prisma = getPrisma(c.env.DATABASE_URL);
+        await prisma.user.delete({ where: { id } });
+        return c.body(null, 204);
     } catch (error) {
-        res.status(500).json({ error: 'ไม่สามารถลบผู้ใช้ได้' });
+        console.error("Error deleting user:", error);
+        return c.json({ error: "Failed to delete user" }, 500);
+    }
+};
+
+export const updatePermissions = async (c: Context<{ Bindings: Bindings, Variables: Variables }>) => {
+    try {
+        const id = c.req.param('id');
+        const { permissions } = await c.req.json();
+        const prisma = getPrisma(c.env.DATABASE_URL);
+        
+        if (!Array.isArray(permissions)) {
+            return c.json({ error: "Permissions must be an array" }, 400);
+        }
+
+        const updatedUser = await prisma.user.update({
+            where: { id },
+            data: { permissions },
+            include: { department: true }
+        });
+        
+        return c.json(updatedUser);
+    } catch (error) {
+        console.error("Error updating permissions:", error);
+        return c.json({ error: "Failed to update permissions" }, 500);
     }
 };

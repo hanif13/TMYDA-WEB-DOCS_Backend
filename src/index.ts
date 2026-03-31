@@ -1,70 +1,63 @@
-import express, { Request, Response } from 'express';
-import cors from 'cors';
-import dotenv from 'dotenv';
-import path from 'path';
-import { prisma } from './lib/prisma';
+import { Hono } from 'hono';
+import { cors } from 'hono/cors';
+import { authenticateToken } from './middleware/auth.middleware';
 
-dotenv.config();
-
-const app = express();
-const port = process.env.PORT || 4000;
-
+// Routes imports
+import authRoutes from './routes/auth.routes';
+import userRoutes from './routes/user.routes';
 import documentRoutes from './routes/document.routes';
 import documentRequestRoutes from './routes/documentRequest.routes';
 import projectRoutes from './routes/project.routes';
 import financeRoutes from './routes/finance.routes';
 import committeeRoutes from './routes/committee.routes';
 import departmentRoutes from './routes/department.routes';
-import authRoutes from './routes/auth.routes';
-import userRoutes from './routes/user.routes';
-import { authenticateToken } from './middleware/auth.middleware';
+
+import { Bindings, Variables } from './middleware/auth.middleware';
+
+const app = new Hono<{ Bindings: Bindings, Variables: Variables }>().basePath('/api');
 
 // CORS — restrict to allowed origins only
-const allowedOrigins = (process.env.CORS_ORIGIN || 'http://localhost:3000')
-    .split(',')
-    .map(o => o.trim());
-
-app.use(cors({
-    origin: (origin, callback) => {
-        // Allow requests with no origin (mobile apps, Postman, server-to-server)
-        if (!origin || allowedOrigins.includes(origin)) {
-            callback(null, true);
-        } else {
-            callback(new Error('Not allowed by CORS'));
-        }
-    },
-    credentials: true
-}));
-
-app.use(express.json({ limit: '10mb' }));
-
-// Static file serving for uploads (public — img tags don't send JWT)
-app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
-
-// API Routes (public)
-app.use('/api/auth', authRoutes);
-app.use('/api/users', userRoutes);
-
-// Protected Data Routes
-app.use('/api/documents', authenticateToken, documentRoutes);
-app.use('/api/document-requests', authenticateToken, documentRequestRoutes);
-app.use('/api/projects', authenticateToken, projectRoutes);
-app.use('/api/finance', authenticateToken, financeRoutes);
-app.use('/api/committee', authenticateToken, committeeRoutes);
-app.use('/api/departments', authenticateToken, departmentRoutes);
+app.use('*', async (c, next) => {
+    const corsOrigins = (c.env.CORS_ORIGIN || 'http://localhost:3000')
+        .split(',')
+        .map((o: string) => o.trim());
+    
+    const corsMiddleware = cors({
+        origin: corsOrigins,
+        credentials: true,
+        allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+        allowHeaders: ['Content-Type', 'Authorization'],
+    });
+    
+    return corsMiddleware(c, next);
+});
 
 // Health check
-app.get('/', (req: Request, res: Response) => {
-    res.json({ message: 'Fityatulhak API is running', status: 'ok' });
+app.get('/', (c) => {
+    return c.json({ message: 'Fityatulhak API (Edge) is running', status: 'ok' });
 });
 
-// Start the server
-app.listen(port, () => {
-    console.log(`🚀 Server is running on http://localhost:${port}`);
-    console.log(`🔒 CORS allowed origins: ${allowedOrigins.join(', ')}`);
-    
-    // Heartbeat to keep process alive and debug exits
-    setInterval(() => {
-        console.log(`[${new Date().toISOString()}] Server heartbeat - Port: ${port}`);
-    }, 10000);
-});
+// API Routes (public)
+app.route('/auth', authRoutes);
+app.route('/users', userRoutes);
+
+// Protected Data Routes
+app.use('/documents/*', authenticateToken);
+app.route('/documents', documentRoutes);
+
+app.use('/document-requests/*', authenticateToken);
+app.route('/document-requests', documentRequestRoutes);
+
+app.use('/projects/*', authenticateToken);
+app.route('/projects', projectRoutes);
+
+app.use('/finance/*', authenticateToken);
+app.route('/finance', financeRoutes);
+
+app.use('/committee/*', authenticateToken);
+app.route('/committee', committeeRoutes);
+
+app.use('/departments/*', authenticateToken);
+app.route('/departments', departmentRoutes);
+
+export default app;

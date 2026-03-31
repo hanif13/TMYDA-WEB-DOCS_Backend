@@ -1,16 +1,17 @@
-import { Request, Response } from 'express';
-import { prisma } from '../lib/prisma';
+import { Context } from 'hono';
+import { getPrisma } from '../lib/prisma';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { JWT_SECRET } from '../middleware/auth.middleware';
+import { Bindings, Variables } from '../middleware/auth.middleware';
 
-export const login = async (req: Request, res: Response) => {
+export const login = async (c: Context<{ Bindings: Bindings, Variables: Variables }>) => {
     try {
-        const { username, password } = req.body;
+        const { username, password } = await c.req.json();
+        const prisma = getPrisma(c.env.DATABASE_URL);
         const normalizedUsername = username?.trim();
 
         if (!normalizedUsername || !password) {
-            return res.status(400).json({ error: 'กรุณากรอกชื่อผู้ใช้และรหัสผ่าน' });
+            return c.json({ error: 'กรุณากรอกชื่อผู้ใช้และรหัสผ่าน' }, 400);
         }
 
         const user = await prisma.user.findUnique({
@@ -19,13 +20,19 @@ export const login = async (req: Request, res: Response) => {
         });
 
         if (!user) {
-            return res.status(401).json({ error: 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง' });
+            return c.json({ error: 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง' }, 401);
         }
 
         const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
         
         if (!isPasswordValid) {
-            return res.status(401).json({ error: 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง' });
+            return c.json({ error: 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง' }, 401);
+        }
+
+        const secret = c.env.JWT_SECRET;
+        if (!secret) {
+            console.error('❌ JWT_SECRET is not set in environment.');
+            return c.json({ error: 'เซิร์ฟเวอร์ยังไม่พร้อมใช้งาน' }, 500);
         }
 
         const token = jwt.sign(
@@ -35,11 +42,11 @@ export const login = async (req: Request, res: Response) => {
                 role: user.role,
                 permissions: user.permissions 
             },
-            JWT_SECRET,
+            secret,
             { expiresIn: '7d' }
         );
 
-        res.json({
+        return c.json({
             token,
             user: {
                 id: user.id,
@@ -52,6 +59,6 @@ export const login = async (req: Request, res: Response) => {
         });
     } catch (error) {
         console.error('Login error details:', error);
-        res.status(500).json({ error: 'เกิดข้อผิดพลาดในการเข้าสู่ระบบ' });
+        return c.json({ error: 'เกิดข้อผิดพลาดในการเข้าสู่ระบบ' }, 500);
     }
 };

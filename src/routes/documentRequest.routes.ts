@@ -1,8 +1,8 @@
-import { Router } from 'express';
+import { Hono } from 'hono';
 import { getDocumentRequests, createDocumentRequest, updateDocumentRequest, deleteDocumentRequest } from '../controllers/documentRequest.controller';
-import { authorizeAdmin } from '../middleware/auth.middleware';
+import { authorizeAdmin, Bindings, Variables } from '../middleware/auth.middleware';
 
-const router = Router();
+const router = new Hono<{ Bindings: Bindings, Variables: Variables }>();
 
 router.get('/', getDocumentRequests);
 router.post('/', authorizeAdmin, createDocumentRequest);

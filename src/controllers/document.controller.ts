@@ -1,11 +1,14 @@
-import { Request, Response } from 'express';
-import { prisma } from '../lib/prisma';
+import { Context } from 'hono';
+import { getPrisma } from '../lib/prisma';
 import { uploadToSupabase } from '../lib/supabase';
-import path from 'path';
+import { Bindings, Variables } from '../middleware/auth.middleware';
 
-export const getDocuments = async (req: Request, res: Response) => {
+const isUUID = (str: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
+
+export const getDocuments = async (c: Context<{ Bindings: Bindings, Variables: Variables }>) => {
     try {
-        const { year } = req.query;
+        const year = c.req.query('year');
+        const prisma = getPrisma(c.env.DATABASE_URL);
         const filter: any = {};
         if (year) filter.thaiYear = Number(year);
 
@@ -18,31 +21,37 @@ export const getDocuments = async (req: Request, res: Response) => {
             },
             orderBy: { createdAt: 'desc' }
         });
-        res.json(documents);
+        return c.json(documents);
     } catch (error) {
         console.error("Error fetching documents:", error);
-        res.status(500).json({ error: "Failed to fetch documents" });
+        return c.json({ error: "Failed to fetch documents" }, 500);
     }
 };
 
-export const createDocument = async (req: Request, res: Response) => {
+export const createDocument = async (c: Context<{ Bindings: Bindings, Variables: Variables }>) => {
     try {
-        const { docNo, name, departmentId, categoryId, uploadedById } = req.body;
+        const formData = await c.req.formData();
+        const prisma = getPrisma(c.env.DATABASE_URL);
         
+        const docNo = formData.get('docNo') as string;
+        const name = formData.get('name') as string;
+        const departmentId = formData.get('departmentId') as string;
+        const categoryId = formData.get('categoryId') as string;
+        const uploadedById = formData.get('uploadedById') as string;
+        const thaiYearVal = formData.get('thaiYear') || formData.get('year');
+        const file = formData.get('file') as File;
+
         // Find real IDs if names were passed instead of UUIDs
         let realDeptId = departmentId;
         let realCatId = categoryId;
         let realUploaderId = uploadedById;
 
-        // Simple check if it's a UUID (very basic)
-        const isUUID = (str: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
-
-        if (!isUUID(departmentId)) {
+        if (departmentId && !isUUID(departmentId)) {
             const dept = await prisma.department.findUnique({ where: { name: departmentId === "ส่วนกลาง" ? "สำนักอำนวยการ" : departmentId } });
             if (dept) realDeptId = dept.id;
         }
 
-        if (!isUUID(categoryId)) {
+        if (categoryId && !isUUID(categoryId)) {
             const cat = await prisma.documentCategory.findUnique({ where: { name: categoryId } });
             if (cat) realCatId = cat.id;
         }
@@ -54,10 +63,10 @@ export const createDocument = async (req: Request, res: Response) => {
         
         // Upload to Supabase instead of local disk
         let filePath = "";
-        if (req.file) {
-            const fileExt = path.extname(req.file.originalname);
-            const fileName = `doc-${Date.now()}-${Math.round(Math.random() * 1e9)}${fileExt}`;
-            filePath = await uploadToSupabase('uploads', `documents/${fileName}`, req.file.buffer, req.file.mimetype);
+        if (file && file.size > 0) {
+            const fileName = `doc-${Date.now()}-${Math.round(Math.random() * 1e9)}-${file.name}`;
+            const buffer = await file.arrayBuffer();
+            filePath = await uploadToSupabase('uploads', `documents/${fileName}`, new Uint8Array(buffer), file.type, c.env);
         }
         
         const newDoc = await prisma.document.create({
@@ -68,7 +77,7 @@ export const createDocument = async (req: Request, res: Response) => {
                 categoryId: realCatId,
                 uploadedById: realUploaderId,
                 filePath,
-                thaiYear: req.body.thaiYear ? Number(req.body.thaiYear) : (req.body.year ? Number(req.body.year) : 2569)
+                thaiYear: thaiYearVal ? Number(thaiYearVal) : 2569
             },
             include: {
                 category: true,
@@ -77,35 +86,43 @@ export const createDocument = async (req: Request, res: Response) => {
             }
         });
         
-        res.status(201).json(newDoc);
+        return c.json(newDoc, 201);
     } catch (error) {
         console.error("Error creating document:", error);
-        res.status(500).json({ error: "Failed to create document" });
+        return c.json({ error: "Failed to create document" }, 500);
     }
 };
 
-export const linkDocumentToProject = async (req: Request, res: Response) => {
+export const linkDocumentToProject = async (c: Context<{ Bindings: Bindings, Variables: Variables }>) => {
     try {
-        const documentId = req.params.documentId as string;
-        const { projectId } = req.body;
+        const documentId = c.req.param('documentId');
+        const { projectId } = await c.req.json();
+        const prisma = getPrisma(c.env.DATABASE_URL);
         
         const updatedDoc = await prisma.document.update({
             where: { id: documentId },
             data: { projectId: projectId || null }
         });
         
-        res.json(updatedDoc);
+        return c.json(updatedDoc);
     } catch (error) {
         console.error("Error linking document:", error);
-        res.status(500).json({ error: "Failed to link document" });
+        return c.json({ error: "Failed to link document" }, 500);
     }
 };
-export const updateDocument = async (req: Request, res: Response) => {
+
+export const updateDocument = async (c: Context<{ Bindings: Bindings, Variables: Variables }>) => {
     try {
-        const id = req.params.id as string;
-        const { docNo, name, departmentId, categoryId, uploadedById } = req.body;
+        const id = c.req.param('id');
+        const formData = await c.req.formData();
+        const prisma = getPrisma(c.env.DATABASE_URL);
         
-        const isUUID = (str: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
+        const docNo = formData.get('docNo') as string;
+        const name = formData.get('name') as string;
+        const departmentId = formData.get('departmentId') as string;
+        const categoryId = formData.get('categoryId') as string;
+        const uploadedById = formData.get('uploadedById') as string;
+        const file = formData.get('file') as File;
 
         let updateData: any = {};
         if (docNo) updateData.docNo = docNo;
@@ -133,10 +150,10 @@ export const updateDocument = async (req: Request, res: Response) => {
             updateData.uploadedById = uploadedById;
         }
         
-        if (req.file) {
-            const fileExt = path.extname(req.file.originalname);
-            const fileName = `doc-${Date.now()}-${Math.round(Math.random() * 1e9)}${fileExt}`;
-            updateData.filePath = await uploadToSupabase('uploads', `documents/${fileName}`, req.file.buffer, req.file.mimetype);
+        if (file && file.size > 0) {
+            const fileName = `doc-${Date.now()}-${Math.round(Math.random() * 1e9)}-${file.name}`;
+            const buffer = await file.arrayBuffer();
+            updateData.filePath = await uploadToSupabase('uploads', `documents/${fileName}`, new Uint8Array(buffer), file.type, c.env);
         }
         
         const updatedDoc = await prisma.document.update({
@@ -149,32 +166,34 @@ export const updateDocument = async (req: Request, res: Response) => {
             }
         });
         
-        res.json(updatedDoc);
+        return c.json(updatedDoc);
     } catch (error) {
         console.error("Error updating document:", error);
-        res.status(500).json({ error: "Failed to update document" });
+        return c.json({ error: "Failed to update document" }, 500);
     }
 };
 
-export const deleteDocument = async (req: Request, res: Response) => {
+export const deleteDocument = async (c: Context<{ Bindings: Bindings, Variables: Variables }>) => {
     try {
-        const id = req.params.id as string;
+        const id = c.req.param('id');
+        const prisma = getPrisma(c.env.DATABASE_URL);
         await prisma.document.delete({ where: { id } });
-        res.status(204).send();
+        return c.body(null, 204);
     } catch (error) {
         console.error("Error deleting document:", error);
-        res.status(500).json({ error: "Failed to delete document" });
+        return c.json({ error: "Failed to delete document" }, 500);
     }
 };
 
-export const getDocumentCategories = async (req: Request, res: Response) => {
+export const getDocumentCategories = async (c: Context<{ Bindings: Bindings, Variables: Variables }>) => {
     try {
+        const prisma = getPrisma(c.env.DATABASE_URL);
         const categories = await prisma.documentCategory.findMany({
             orderBy: { name: 'asc' }
         });
-        res.json(categories);
+        return c.json(categories);
     } catch (error) {
         console.error("Error fetching categories:", error);
-        res.status(500).json({ error: "Failed to fetch categories" });
+        return c.json({ error: "Failed to fetch categories" }, 500);
     }
 };

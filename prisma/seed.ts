@@ -15,11 +15,12 @@ async function main() {
 
     // Cleanup existing data
     await prisma.transaction.deleteMany();
-    await prisma.project.deleteMany();
-    await prisma.annualPlan.deleteMany();
     await prisma.document.deleteMany();
-    await prisma.documentCategory.deleteMany();
+    await prisma.project.deleteMany();
+    await prisma.committeeMember.deleteMany();
     await prisma.user.deleteMany();
+    await prisma.annualPlan.deleteMany();
+    await prisma.documentCategory.deleteMany();
     await prisma.department.deleteMany();
 
     // Seed Departments

@@ -1,136 +1,115 @@
-import { Request, Response } from 'express';
-import { prisma } from '../lib/prisma';
+import { Context } from 'hono';
+import { getPrisma } from '../lib/prisma';
 import { uploadToSupabase } from '../lib/supabase';
-import path from 'path';
+import { Bindings, Variables } from '../middleware/auth.middleware';
 
-export const getTransactions = async (req: Request, res: Response) => {
+export const getTransactions = async (c: Context<{ Bindings: Bindings, Variables: Variables }>) => {
     try {
-        const { year } = req.query;
-        const filter: any = {};
-        if (year) filter.thaiYear = Number(year);
+        const year = c.req.query('year');
+        const prisma = getPrisma(c.env.DATABASE_URL);
+        const where: any = {};
+        if (year) where.thaiYear = Number(year);
 
         const transactions = await prisma.transaction.findMany({
-            where: filter,
-            include: {
-                department: true,
-                project: true,
-            },
-            orderBy: { createdAt: 'desc' }
+            where,
+            include: { department: true, category: true },
+            orderBy: { date: 'desc' }
         });
-        res.json(transactions);
+        return c.json(transactions);
     } catch (error) {
         console.error("Error fetching transactions:", error);
-        res.status(500).json({ error: "Failed to fetch transactions" });
+        return c.json({ error: "Failed to fetch transactions" }, 500);
     }
 };
 
-export const createTransaction = async (req: Request, res: Response) => {
+export const createTransaction = async (c: Context<{ Bindings: Bindings, Variables: Variables }>) => {
     try {
-        const { date, title, type, amount, category, docRef, months, departmentId, projectId } = req.body;
+        const formData = await c.req.formData();
+        const prisma = getPrisma(c.env.DATABASE_URL);
         
-        // Handle file upload for slip to Supabase
-        let slipUrl = req.body.slipUrl;
-        if (req.file) {
-            const fileExt = path.extname(req.file.originalname);
-            const fileName = `slip-${Date.now()}-${Math.round(Math.random() * 1e9)}${fileExt}`;
-            slipUrl = await uploadToSupabase('uploads', `slips/${fileName}`, req.file.buffer, req.file.mimetype);
+        const date = formData.get('date') as string;
+        const type = formData.get('type') as 'INCOME' | 'EXPENSE';
+        const departmentId = formData.get('departmentId') as string;
+        const categoryId = formData.get('categoryId') as string;
+        const amount = formData.get('amount') as string;
+        const description = formData.get('description') as string;
+        const file = formData.get('evidence') as File;
+        const thaiYear = formData.get('thaiYear') || formData.get('year');
+
+        let evidenceUrl = "";
+        if (file && file.size > 0) {
+            const fileName = `fin-${Date.now()}-${Math.round(Math.random() * 1e9)}-${file.name}`;
+            const buffer = await file.arrayBuffer();
+            evidenceUrl = await uploadToSupabase('uploads', `finance/${fileName}`, new Uint8Array(buffer), file.type, c.env);
         }
 
-        // Start a transaction to ensure data consistency
-        const transaction = await prisma.$transaction(async (tx) => {
-            const newTx = await tx.transaction.create({
-                data: {
-                    date,
-                    title,
-                    type, // 'income', 'expense', or 'refund'
-                    amount: Number(amount),
-                    category: category || 'general',
-                    docRef,
-                    slipUrl,
-                    months: typeof months === 'string' ? JSON.parse(months) : (months || []),
-                    departmentId,
-                    projectId: projectId || null,
-                    thaiYear: req.body.thaiYear ? Number(req.body.thaiYear) : (req.body.year ? Number(req.body.year) : 2569)
-                },
-                include: {
-                    department: true,
-                    project: true,
-                }
-            });
-
-            // Update Project and AnnualPlan budget usage for expense, refund, or project-related income
-            if (projectId && (type === 'expense' || type === 'refund' || type === 'income')) {
-                const project = await tx.project.findUnique({
-                    where: { id: projectId },
-                    select: { annualPlanId: true }
-                });
-
-                if (project) {
-                    const adjustment = type === 'expense' ? Number(amount) : -Number(amount);
-                    
-                    // Update project-level total
-                    await tx.project.update({
-                        where: { id: projectId },
-                        data: { budgetUsed: { increment: adjustment } }
-                    });
-
-                    // Update annual plan total
-                    await tx.annualPlan.update({
-                        where: { id: project.annualPlanId },
-                        data: { totalUsed: { increment: adjustment } }
-                    });
-                }
-            }
-
-            return newTx;
+        const transaction = await prisma.transaction.create({
+            data: {
+                date: new Date(date),
+                type,
+                departmentId,
+                categoryId,
+                amount: Number(amount),
+                description: description || "",
+                evidenceUrl,
+                thaiYear: thaiYear ? Number(thaiYear) : 2569
+            },
+            include: { department: true, category: true }
         });
-
-        res.status(201).json(transaction);
+        
+        return c.json(transaction, 201);
     } catch (error) {
         console.error("Error creating transaction:", error);
-        res.status(500).json({ error: "Failed to create transaction" });
+        return c.json({ error: "Failed to create transaction" }, 500);
     }
 };
 
-export const deleteTransaction = async (req: Request, res: Response) => {
+export const deleteTransaction = async (c: Context<{ Bindings: Bindings, Variables: Variables }>) => {
     try {
-        const { id } = req.params;
-
-        await prisma.$transaction(async (tx) => {
-            const transaction = await tx.transaction.findUnique({
-                where: { id: String(id) },
-                include: { project: true }
-            });
-
-            if (!transaction) {
-                throw new Error("Transaction not found");
-            }
-
-            // Reverse budget updates
-            if (transaction.projectId && (transaction.type === 'expense' || transaction.type === 'refund' || transaction.type === 'income')) {
-                const adjustment = transaction.type === 'expense' ? -transaction.amount : transaction.amount;
-                
-                await tx.project.update({
-                    where: { id: transaction.projectId },
-                    data: { budgetUsed: { increment: adjustment } }
-                });
-
-                // Update annual plan total
-                const txWithProject = transaction as any;
-                if (txWithProject.project) {
-                     await tx.annualPlan.update({
-                        where: { id: txWithProject.project.annualPlanId },
-                        data: { totalUsed: { increment: adjustment } }
-                    });
-                }
-            }
-
-            await tx.transaction.delete({ where: { id: String(id) } });
-        });
-
-        res.json({ message: "Transaction deleted successfully" });
-    } catch (error: any) {
+        const id = c.req.param('id');
+        const prisma = getPrisma(c.env.DATABASE_URL);
+        await prisma.transaction.delete({ where: { id } });
+        return c.body(null, 204);
+    } catch (error) {
         console.error("Error deleting transaction:", error);
-        res.status(500).json({ error: error.message || "Failed to delete transaction" });
+        return c.json({ error: "Failed to delete transaction" }, 500);
+    }
+};
+
+export const getFinanceCategories = async (c: Context<{ Bindings: Bindings, Variables: Variables }>) => {
+    try {
+        const prisma = getPrisma(c.env.DATABASE_URL);
+        const categories = await prisma.transactionCategory.findMany({
+            orderBy: { name: 'asc' }
+        });
+        return c.json(categories);
+    } catch (error) {
+        console.error("Error fetching finance categories:", error);
+        return c.json({ error: "Failed to fetch categories" }, 500);
+    }
+};
+
+export const getFinanceSummary = async (c: Context<{ Bindings: Bindings, Variables: Variables }>) => {
+    try {
+        const year = c.req.query('year');
+        const prisma = getPrisma(c.env.DATABASE_URL);
+        const where: any = {};
+        if (year) where.thaiYear = Number(year);
+
+        const transactions = await prisma.transaction.findMany({ where });
+        
+        const summary = transactions.reduce((acc, curr) => {
+            if (curr.type === 'INCOME') acc.totalIncome += curr.amount;
+            else acc.totalExpense += curr.amount;
+            return acc;
+        }, { totalIncome: 0, totalExpense: 0 });
+
+        return c.json({
+            ...summary,
+            balance: summary.totalIncome - summary.totalExpense
+        });
+    } catch (error) {
+        console.error("Error fetching finance summary:", error);
+        return c.json({ error: "Failed to fetch summary" }, 500);
     }
 };
