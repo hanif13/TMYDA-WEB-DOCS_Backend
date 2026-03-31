@@ -1,6 +1,7 @@
-import { Hono } from 'hono';
-import { cors } from 'hono/cors';
-import { authenticateToken } from './middleware/auth.middleware';
+import express from 'express';
+import cors from 'cors';
+import morgan from 'morgan';
+import dotenv from 'dotenv';
 
 // Routes imports
 import authRoutes from './routes/auth.routes';
@@ -12,52 +13,51 @@ import financeRoutes from './routes/finance.routes';
 import committeeRoutes from './routes/committee.routes';
 import departmentRoutes from './routes/department.routes';
 
-import { Bindings, Variables } from './middleware/auth.middleware';
+// Load environment variables
+dotenv.config();
 
-const app = new Hono<{ Bindings: Bindings, Variables: Variables }>().basePath('/api');
+const app = express();
+const PORT = process.env.PORT || 4000;
 
-// CORS — restrict to allowed origins only
-app.use('*', async (c, next) => {
-    const corsOrigins = (c.env.CORS_ORIGIN || 'http://localhost:3000')
-        .split(',')
-        .map((o: string) => o.trim());
-    
-    const corsMiddleware = cors({
-        origin: corsOrigins,
-        credentials: true,
-        allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-        allowHeaders: ['Content-Type', 'Authorization'],
-    });
-    
-    return corsMiddleware(c, next);
-});
+// Middleware
+app.use(cors({
+    origin: (process.env.CORS_ORIGIN || 'http://localhost:3000').split(',').map(o => o.trim()),
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization']
+}));
+app.use(morgan('dev'));
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 // Health check
-app.get('/', (c) => {
-    return c.json({ message: 'Fityatulhak API (Edge) is running', status: 'ok' });
+app.get('/api', (req, res) => {
+    res.json({ message: 'Fityatulhak API is running (Node.js/Express)', status: 'ok' });
 });
 
-// API Routes (public)
-app.route('/auth', authRoutes);
-app.route('/users', userRoutes);
+// API Routes
+app.use('/api/auth', authRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/documents', documentRoutes);
+app.use('/api/document-requests', documentRequestRoutes);
+app.use('/api/projects', projectRoutes);
+app.use('/api/finance', financeRoutes);
+app.use('/api/committee', committeeRoutes);
+app.use('/api/departments', departmentRoutes);
 
-// Protected Data Routes
-app.use('/documents/*', authenticateToken);
-app.route('/documents', documentRoutes);
+// Global Error Handler
+app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+    console.error(`🔥 Uncaught Exception: ${err.message}`);
+    console.error(err.stack);
+    res.status(500).json({ 
+        error: 'เกิดข้อผิดพลาดภายในเซิร์ฟเวอร์', 
+        message: err.message,
+        stack: process.env.NODE_ENV === 'development' ? err.stack : undefined 
+    });
+});
 
-app.use('/document-requests/*', authenticateToken);
-app.route('/document-requests', documentRequestRoutes);
-
-app.use('/projects/*', authenticateToken);
-app.route('/projects', projectRoutes);
-
-app.use('/finance/*', authenticateToken);
-app.route('/finance', financeRoutes);
-
-app.use('/committee/*', authenticateToken);
-app.route('/committee', committeeRoutes);
-
-app.use('/departments/*', authenticateToken);
-app.route('/departments', departmentRoutes);
+app.listen(PORT, () => {
+    console.log(`🚀 Server is running on port ${PORT}`);
+});
 
 export default app;

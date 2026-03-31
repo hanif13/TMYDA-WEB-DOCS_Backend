@@ -1,12 +1,11 @@
-import { Hono } from 'hono';
+import { Router } from 'express';
 import { getUsers, createUser, updatePermissions, deleteUser, updateUser } from '../controllers/user.controller';
-import { authenticateToken, authorizeAdmin, Bindings, Variables } from '../middleware/auth.middleware';
+import { authenticateToken, authorizeAdmin } from '../middleware/auth.middleware';
 
-const router = new Hono<{ Bindings: Bindings, Variables: Variables }>();
+const router = Router();
 
 // All user routes require authentication and admin/super-admin role
-// In Hono, we can apply middleware at the router level
-router.use('*', authenticateToken, authorizeAdmin);
+router.use(authenticateToken as any, authorizeAdmin as any);
 
 router.get('/', getUsers);
 router.post('/', createUser);

@@ -1,16 +1,14 @@
-import { Context } from 'hono';
-import { getPrisma } from '../lib/prisma';
-import { Bindings, Variables } from '../middleware/auth.middleware';
+import { Request, Response } from 'express';
+import { prisma } from '../lib/prisma';
 
-export const getDepartments = async (c: Context<{ Bindings: Bindings, Variables: Variables }>) => {
+export const getDepartments = async (req: Request, res: Response) => {
     try {
-        const prisma = getPrisma(c.env.DATABASE_URL);
         const departments = await prisma.department.findMany({
             orderBy: { name: 'asc' }
         });
-        return c.json(departments);
+        return res.json(departments);
     } catch (error) {
         console.error("Error fetching departments:", error);
-        return c.json({ error: "Failed to fetch departments" }, 500);
+        return res.status(500).json({ error: "Failed to fetch departments" });
     }
 };

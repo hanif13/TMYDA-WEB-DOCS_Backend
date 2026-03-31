@@ -1,8 +1,7 @@
-import { Hono } from 'hono';
+import { Router } from 'express';
 import { login } from '../controllers/auth.controller';
-import { Bindings, Variables } from '../middleware/auth.middleware';
 
-const router = new Hono<{ Bindings: Bindings, Variables: Variables }>();
+const router = Router();
 
 router.post('/login', login);
 

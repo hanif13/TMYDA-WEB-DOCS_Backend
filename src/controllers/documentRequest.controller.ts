@@ -1,14 +1,12 @@
-import { Context } from 'hono';
-import { getPrisma } from '../lib/prisma';
-import { Bindings, Variables } from '../middleware/auth.middleware';
+import { Request, Response } from 'express';
+import { prisma } from '../lib/prisma';
 
-export const getDocumentRequests = async (c: Context<{ Bindings: Bindings, Variables: Variables }>) => {
+export const getDocumentRequests = async (req: Request, res: Response) => {
     try {
-        const year = c.req.query('year');
-        const prisma = getPrisma(c.env.DATABASE_URL);
+        const { year } = req.query;
         const where: any = {};
-        if (year && !isNaN(parseInt(year))) {
-            where.thaiYear = parseInt(year);
+        if (year && !isNaN(parseInt(year as string))) {
+            where.thaiYear = parseInt(year as string);
         }
 
         const requests = await prisma.documentRequest.findMany({
@@ -16,20 +14,19 @@ export const getDocumentRequests = async (c: Context<{ Bindings: Bindings, Varia
             orderBy: { createdAt: 'desc' }
         });
         
-        return c.json(requests);
+        return res.json(requests);
     } catch (error) {
-        console.error("DETAILED ERROR Fetching document requests:", error);
-        return c.json({ 
+        console.error("Error fetching document requests:", error);
+        return res.status(500).json({ 
             error: "Failed to fetch document requests", 
             details: error instanceof Error ? error.message : String(error) 
-        }, 500);
+        });
     }
 };
 
-export const createDocumentRequest = async (c: Context<{ Bindings: Bindings, Variables: Variables }>) => {
+export const createDocumentRequest = async (req: Request, res: Response) => {
     try {
-        const { requestType, department, requestedBy, fields, thaiYear } = await c.req.json();
-        const prisma = getPrisma(c.env.DATABASE_URL);
+        const { requestType, department, requestedBy, fields, thaiYear } = req.body;
         
         const newRequest = await prisma.documentRequest.create({
             data: {
@@ -41,18 +38,17 @@ export const createDocumentRequest = async (c: Context<{ Bindings: Bindings, Var
             }
         });
         
-        return c.json(newRequest, 201);
+        return res.status(201).json(newRequest);
     } catch (error) {
         console.error("Error creating document request:", error);
-        return c.json({ error: "Failed to create document request" }, 500);
+        return res.status(500).json({ error: "Failed to create document request" });
     }
 };
 
-export const updateDocumentRequest = async (c: Context<{ Bindings: Bindings, Variables: Variables }>) => {
+export const updateDocumentRequest = async (req: Request, res: Response) => {
     try {
-        const id = c.req.param('id');
-        const { requestType, department, requestedBy, fields, status } = await c.req.json();
-        const prisma = getPrisma(c.env.DATABASE_URL);
+        const id = req.params.id as string;
+        const { requestType, department, requestedBy, fields, status } = req.body;
         
         const updatedRequest = await prisma.documentRequest.update({
             where: { id: id as string },
@@ -65,23 +61,22 @@ export const updateDocumentRequest = async (c: Context<{ Bindings: Bindings, Var
             }
         });
         
-        return c.json(updatedRequest);
+        return res.json(updatedRequest);
     } catch (error) {
         console.error("Error updating document request:", error);
-        return c.json({ error: "Failed to update document request" }, 500);
+        return res.status(500).json({ error: "Failed to update document request" });
     }
 };
 
-export const deleteDocumentRequest = async (c: Context<{ Bindings: Bindings, Variables: Variables }>) => {
+export const deleteDocumentRequest = async (req: Request, res: Response) => {
     try {
-        const id = c.req.param('id');
-        const prisma = getPrisma(c.env.DATABASE_URL);
+        const id = req.params.id as string;
         await prisma.documentRequest.delete({
             where: { id: id as string }
         });
-        return c.json({ message: "Document request deleted successfully" });
+        return res.json({ message: "Document request deleted successfully" });
     } catch (error) {
         console.error("Error deleting document request:", error);
-        return c.json({ error: "Failed to delete document request" }, 500);
+        return res.status(500).json({ error: "Failed to delete document request" });
     }
 };

@@ -1,16 +1,16 @@
-import { Hono } from 'hono';
+import { Router } from 'express';
 import { getCommitteeMembers, createCommitteeMember, updateCommitteeMember, deleteCommitteeMember, createCommitteeBulk } from '../controllers/committee.controller';
-import { authorizeAdmin, Bindings, Variables } from '../middleware/auth.middleware';
+import { authenticateToken, authorizeAdmin } from '../middleware/auth.middleware';
+import { upload } from '../middleware/upload';
 
-const router = new Hono<{ Bindings: Bindings, Variables: Variables }>();
+const router = Router();
 
 router.get('/', getCommitteeMembers);
-router.post('/bulk', authorizeAdmin, createCommitteeBulk);
+router.post('/bulk', authenticateToken as any, authorizeAdmin as any, createCommitteeBulk);
 
-// In Hono, we don't need a separate upload middleware for simple cases; 
-// we handle multipart/form-data in the controller.
-router.post('/', authorizeAdmin, createCommitteeMember);
-router.patch('/:id', authorizeAdmin, updateCommitteeMember);
-router.delete('/:id', authorizeAdmin, deleteCommitteeMember);
+// Handle single image upload for committee member
+router.post('/', authenticateToken as any, authorizeAdmin as any, upload.single('image'), createCommitteeMember);
+router.patch('/:id', authenticateToken as any, authorizeAdmin as any, upload.single('image'), updateCommitteeMember);
+router.delete('/:id', authenticateToken as any, authorizeAdmin as any, deleteCommitteeMember);
 
 export default router;

@@ -1,11 +1,9 @@
-import { Context } from 'hono';
-import { getPrisma } from '../lib/prisma';
-import { uploadToSupabase } from '../lib/supabase';
-import { Bindings, Variables } from '../middleware/auth.middleware';
+import { Request, Response } from 'express';
+import { prisma } from '../lib/prisma';
+import { supabaseAdmin } from '../lib/supabase';
 
-export const getAnnualPlans = async (c: Context<{ Bindings: Bindings, Variables: Variables }>) => {
+export const getAnnualPlans = async (req: Request, res: Response) => {
     try {
-        const prisma = getPrisma(c.env.DATABASE_URL);
         const plans = await prisma.annualPlan.findMany({
             include: {
                 projects: {
@@ -19,16 +17,15 @@ export const getAnnualPlans = async (c: Context<{ Bindings: Bindings, Variables:
             },
             orderBy: { year: 'desc' }
         });
-        return c.json(plans);
+        return res.json(plans);
     } catch (error) {
         console.error("Error fetching plans:", error);
-        return c.json({ error: "Failed to fetch annual plans" }, 500);
+        return res.status(500).json({ error: "Failed to fetch annual plans" });
     }
 };
 
-export const getAnnualYears = async (c: Context<{ Bindings: Bindings, Variables: Variables }>) => {
+export const getAnnualYears = async (req: Request, res: Response) => {
     try {
-        const prisma = getPrisma(c.env.DATABASE_URL);
         const years = await prisma.annualPlan.findMany({
             select: {
                 id: true,
@@ -40,17 +37,16 @@ export const getAnnualYears = async (c: Context<{ Bindings: Bindings, Variables:
             },
             orderBy: { year: 'desc' }
         });
-        return c.json(years);
+        return res.json(years);
     } catch (error) {
         console.error("Error fetching annual years:", error);
-        return c.json({ error: "Failed to fetch annual years" }, 500);
+        return res.status(500).json({ error: "Failed to fetch annual years" });
     }
 };
 
-export const createProject = async (c: Context<{ Bindings: Bindings, Variables: Variables }>) => {
+export const createProject = async (req: Request, res: Response) => {
     try {
-        const { name, departmentId, subDepartment, projectType, lead, budget, quarter, annualPlanId, months, isUnplanned } = await c.req.json();
-        const prisma = getPrisma(c.env.DATABASE_URL);
+        const { name, departmentId, subDepartment, projectType, lead, budget, quarter, annualPlanId, months, isUnplanned } = req.body;
         
         const newProject = await prisma.project.create({
             data: {
@@ -78,17 +74,16 @@ export const createProject = async (c: Context<{ Bindings: Bindings, Variables: 
             data: { totalBudget: { increment: Number(budget) } }
         });
         
-        return c.json(newProject, 201);
+        return res.status(201).json(newProject);
     } catch (error) {
         console.error("Error creating project:", error);
-        return c.json({ error: "Failed to create project" }, 500);
+        return res.status(500).json({ error: "Failed to create project" });
     }
 };
 
-export const createAnnualPlan = async (c: Context<{ Bindings: Bindings, Variables: Variables }>) => {
+export const createAnnualPlan = async (req: Request, res: Response) => {
     try {
-        const { year, thaiYear, label } = await c.req.json();
-        const prisma = getPrisma(c.env.DATABASE_URL);
+        const { year, thaiYear, label } = req.body;
         const newPlan = await prisma.annualPlan.create({
             data: {
                 year: Number(year),
@@ -98,54 +93,52 @@ export const createAnnualPlan = async (c: Context<{ Bindings: Bindings, Variable
                 totalUsed: 0
             }
         });
-        return c.json(newPlan, 201);
+        return res.status(201).json(newPlan);
     } catch (error: any) {
         console.error("Error creating annual plan:", error);
         if (error.code === 'P2002') {
-            return c.json({ error: "Year already exists" }, 400);
+            return res.status(400).json({ error: "Year already exists" });
         }
-        return c.json({ error: "Failed to create annual plan" }, 500);
+        return res.status(500).json({ error: "Failed to create annual plan" });
     }
 };
 
-export const updateProject = async (c: Context<{ Bindings: Bindings, Variables: Variables }>) => {
-    const id = c.req.param('id');
+export const updateProject = async (req: Request, res: Response) => {
     try {
-        const formData = await c.req.formData();
-        const prisma = getPrisma(c.env.DATABASE_URL);
+        const id = req.params.id as string;
+        const data = req.body;
+        const files = req.files as Express.Multer.File[];
         
-        const name = formData.get('name') as string;
-        const departmentId = formData.get('departmentId') as string;
-        const subDepartment = formData.get('subDepartment') as string;
-        const projectType = formData.get('projectType') as string;
-        const lead = formData.get('lead') as string;
-        const budget = formData.get('budget') as string;
-        const quarter = formData.get('quarter') as string;
-        const monthsStr = formData.get('months') as string;
-        const isStarted = formData.get('isStarted') as string;
-        const status = formData.get('status') as string;
-        const budgetUsed = formData.get('budgetUsed') as string;
-        const description = formData.get('description') as string;
-        const kpi = formData.get('kpi') as string;
-        const targetPax = formData.get('targetPax') as string;
-        const actualPax = formData.get('actualPax') as string;
-        const actualDate = formData.get('actualDate') as string;
-        const actualBudget = formData.get('actualBudget') as string;
-        const isUnplanned = formData.get('isUnplanned') as string;
-        const completedMonthsStr = formData.get('completedMonths') as string;
+        const name = data.name;
+        const departmentId = data.departmentId;
+        const subDepartment = data.subDepartment;
+        const projectType = data.projectType;
+        const lead = data.lead;
+        const budget = data.budget;
+        const quarter = data.quarter;
+        const isStarted = data.isStarted;
+        const status = data.status;
+        const budgetUsed = data.budgetUsed;
+        const description = data.description;
+        const kpi = data.kpi;
+        const targetPax = data.targetPax;
+        const actualPax = data.actualPax;
+        const actualDate = data.actualDate;
+        const actualBudget = data.actualBudget;
+        const isUnplanned = data.isUnplanned;
         
-        let months = undefined;
-        if (monthsStr) {
-            try { months = JSON.parse(monthsStr); } catch (e) {}
+        let months = data.months;
+        if (typeof months === 'string') {
+            try { months = JSON.parse(months); } catch (e) {}
         }
         
-        let completedMonths = undefined;
-        if (completedMonthsStr) {
-            try { completedMonths = JSON.parse(completedMonthsStr); } catch (e) {}
+        let completedMonths = data.completedMonths;
+        if (typeof completedMonths === 'string') {
+            try { completedMonths = JSON.parse(completedMonths); } catch (e) {}
         }
 
         // If budget is changing, we need to update the AnnualPlan totalBudget
-        if (budget !== null) {
+        if (budget !== undefined && budget !== null) {
             const oldProject = await prisma.project.findUnique({
                 where: { id },
                 select: { budget: true, annualPlanId: true }
@@ -160,17 +153,24 @@ export const updateProject = async (c: Context<{ Bindings: Bindings, Variables: 
             }
         }
 
-        const images = formData.getAll('images') as File[];
         let summaryImages = undefined;
-        if (images.length > 0) {
-            summaryImages = await Promise.all(images.map(async (file) => {
-                if (file.size === 0) return null;
-                const fileName = `prj-${Date.now()}-${Math.round(Math.random() * 1e9)}-${file.name}`;
-                const buffer = await file.arrayBuffer();
-                return await uploadToSupabase('uploads', `projects/${fileName}`, new Uint8Array(buffer), file.type, c.env);
+        if (files && files.length > 0) {
+            summaryImages = await Promise.all(files.map(async (file) => {
+                const extension = file.originalname.split('.').pop() || 'tmp';
+                const fileName = `prj-${Date.now()}-${Math.round(Math.random() * 1e9)}.${extension}`;
+                const { data: uploadData, error } = await supabaseAdmin.storage
+                    .from('uploads')
+                    .upload(`projects/${fileName}`, file.buffer, {
+                        contentType: file.mimetype,
+                        upsert: true
+                    });
+
+                if (error) throw error;
+                const { data: { publicUrl } } = supabaseAdmin.storage
+                    .from('uploads')
+                    .getPublicUrl(`projects/${fileName}`);
+                return publicUrl;
             }));
-            // Filter out nulls from empty files
-            summaryImages = summaryImages.filter(img => img !== null);
         }
 
         const updated = await prisma.project.update({
@@ -178,23 +178,23 @@ export const updateProject = async (c: Context<{ Bindings: Bindings, Variables: 
             data: {
                 ...(name && { name }),
                 ...(departmentId && { departmentId }),
-                ...(subDepartment !== null && { subDepartment }),
+                ...(subDepartment !== undefined && { subDepartment }),
                 ...(projectType && { projectType }),
                 ...(lead && { lead }),
-                ...(budget !== null && { budget: Number(budget) }),
-                ...(quarter !== null && { quarter: Number(quarter) }),
+                ...(budget !== undefined && { budget: Number(budget) }),
+                ...(quarter !== undefined && { quarter: Number(quarter) }),
                 ...(months !== undefined && { months }),
                 ...(completedMonths !== undefined && { completedMonths }),
-                ...(isStarted !== null && { isStarted: isStarted === 'true' }),
+                ...(isStarted !== undefined && { isStarted: String(isStarted) === 'true' }),
                 ...(status && { status }),
-                ...(budgetUsed !== null && { budgetUsed: Number(budgetUsed) }),
-                ...(description !== null && { description }),
-                ...(kpi !== null && { kpi }),
-                ...(targetPax !== null && { targetPax: Number(targetPax) }),
-                ...(actualPax !== null && { actualPax: Number(actualPax) }),
-                ...(actualDate !== null && { actualDate }),
-                ...(actualBudget !== null && { actualBudget: Number(actualBudget) }),
-                ...(isUnplanned !== null && { isUnplanned: isUnplanned === 'true' }),
+                ...(budgetUsed !== undefined && { budgetUsed: Number(budgetUsed) }),
+                ...(description !== undefined && { description }),
+                ...(kpi !== undefined && { kpi }),
+                ...(targetPax !== undefined && { targetPax: Number(targetPax) }),
+                ...(actualPax !== undefined && { actualPax: Number(actualPax) }),
+                ...(actualDate !== undefined && { actualDate }),
+                ...(actualBudget !== undefined && { actualBudget: Number(actualBudget) }),
+                ...(isUnplanned !== undefined && { isUnplanned: String(isUnplanned) === 'true' }),
                 ...(summaryImages && { summaryImages })
             },
             include: {
@@ -202,51 +202,46 @@ export const updateProject = async (c: Context<{ Bindings: Bindings, Variables: 
             }
         });
         
-        return c.json(updated);
+        return res.json(updated);
     } catch (error) {
         console.error("Error updating project:", error);
-        return c.json({ error: "Failed to update project" }, 500);
+        return res.status(500).json({ error: "Failed to update project" });
     }
 };
 
-export const deleteProject = async (c: Context<{ Bindings: Bindings, Variables: Variables }>) => {
+export const deleteProject = async (req: Request, res: Response) => {
     try {
-        const id = c.req.param('id');
-        const prisma = getPrisma(c.env.DATABASE_URL);
+        const id = req.params.id as string;
         
-        // Find project to get budget and annualPlanId before deleting
         const project = await prisma.project.findUnique({
             where: { id },
             select: { budget: true, annualPlanId: true }
         });
 
         if (!project) {
-            return c.json({ error: "Project not found" }, 404);
+            return res.status(404).json({ error: "Project not found" });
         }
 
-        // Delete project
         await prisma.project.delete({
             where: { id }
         });
 
-        // Update Annual Plan Total Budget
         await prisma.annualPlan.update({
             where: { id: project.annualPlanId },
             data: { totalBudget: { decrement: project.budget } }
         });
 
-        return c.json({ message: "Project deleted successfully" });
+        return res.json({ message: "Project deleted successfully" });
     } catch (error) {
         console.error("Error deleting project:", error);
-        return c.json({ error: "Failed to delete project" }, 500);
+        return res.status(500).json({ error: "Failed to delete project" });
     }
 };
 
-export const updateAnnualPlan = async (c: Context<{ Bindings: Bindings, Variables: Variables }>) => {
+export const updateAnnualPlan = async (req: Request, res: Response) => {
     try {
-        const id = c.req.param('id');
-        const { year, thaiYear, label } = await c.req.json();
-        const prisma = getPrisma(c.env.DATABASE_URL);
+        const id = req.params.id as string;
+        const { year, thaiYear, label } = req.body;
         
         const updated = await prisma.annualPlan.update({
             where: { id },
@@ -257,40 +252,37 @@ export const updateAnnualPlan = async (c: Context<{ Bindings: Bindings, Variable
             }
         });
         
-        return c.json(updated);
+        return res.json(updated);
     } catch (error: any) {
         console.error("Error updating annual plan:", error);
         if (error.code === 'P2002') {
-            return c.json({ error: "Year already exists" }, 400);
+            return res.status(400).json({ error: "Year already exists" });
         }
-        return c.json({ error: "Failed to update annual plan" }, 500);
+        return res.status(500).json({ error: "Failed to update annual plan" });
     }
 };
 
-export const deleteAnnualPlan = async (c: Context<{ Bindings: Bindings, Variables: Variables }>) => {
+export const deleteAnnualPlan = async (req: Request, res: Response) => {
     try {
-        const id = c.req.param('id');
-        const prisma = getPrisma(c.env.DATABASE_URL);
+        const id = req.params.id as string;
         
-        // Use a transaction to ensure both projects and the plan are deleted
         await prisma.$transaction([
             prisma.project.deleteMany({ where: { annualPlanId: id } }),
             prisma.annualPlan.delete({ where: { id } })
         ]);
         
-        return c.json({ message: "Annual plan and associated projects deleted successfully" });
+        return res.json({ message: "Annual plan and associated projects deleted successfully" });
     } catch (error) {
         console.error("Error deleting annual plan:", error);
-        return c.json({ error: "Failed to delete annual plan" }, 500);
+        return res.status(500).json({ error: "Failed to delete annual plan" });
     }
 };
 
-export const createProjectBulk = async (c: Context<{ Bindings: Bindings, Variables: Variables }>) => {
+export const createProjectBulk = async (req: Request, res: Response) => {
     try {
-        const { projects, annualPlanId } = await c.req.json();
-        const prisma = getPrisma(c.env.DATABASE_URL);
+        const { projects, annualPlanId } = req.body;
         if (!Array.isArray(projects) || !annualPlanId) {
-            return c.json({ error: "Invalid data format or missing annualPlanId." }, 400);
+            return res.status(400).json({ error: "Invalid data format or missing annualPlanId." });
         }
         
         let totalBudgetToAdd = 0;
@@ -323,9 +315,9 @@ export const createProjectBulk = async (c: Context<{ Bindings: Bindings, Variabl
             data: { totalBudget: { increment: totalBudgetToAdd } }
         });
 
-        return c.json({ message: "Imported successfully", count: result.count }, 201);
+        return res.status(201).json({ message: "Imported successfully", count: result.count });
     } catch (error) {
         console.error("Error bulk creating projects:", error);
-        return c.json({ error: "Failed to import projects" }, 500);
+        return res.status(500).json({ error: "Failed to import projects" });
     }
 };

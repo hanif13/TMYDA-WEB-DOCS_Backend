@@ -1,26 +1,23 @@
-import { Context } from 'hono';
-import { getPrisma } from '../lib/prisma';
+import { Request, Response } from 'express';
+import { prisma } from '../lib/prisma';
 import bcrypt from 'bcryptjs';
-import { Bindings, Variables } from '../middleware/auth.middleware';
 
-export const getUsers = async (c: Context<{ Bindings: Bindings, Variables: Variables }>) => {
+export const getUsers = async (req: Request, res: Response) => {
     try {
-        const prisma = getPrisma(c.env.DATABASE_URL);
         const users = await prisma.user.findMany({
             include: { department: true },
             orderBy: { createdAt: 'desc' }
         });
-        return c.json(users);
+        return res.json(users);
     } catch (error) {
         console.error("Error fetching users:", error);
-        return c.json({ error: "Failed to fetch users" }, 500);
+        return res.status(500).json({ error: "Failed to fetch users" });
     }
 };
 
-export const createUser = async (c: Context<{ Bindings: Bindings, Variables: Variables }>) => {
+export const createUser = async (req: Request, res: Response) => {
     try {
-        const { username, password, role, name, department } = await c.req.json();
-        const prisma = getPrisma(c.env.DATABASE_URL);
+        const { username, password, role, name, department } = req.body;
         
         let departmentId = department;
         if (department && department.length > 10) {
@@ -44,18 +41,17 @@ export const createUser = async (c: Context<{ Bindings: Bindings, Variables: Var
             include: { department: true }
         });
         
-        return c.json(newUser, 201);
+        return res.status(201).json(newUser);
     } catch (error) {
         console.error("Error creating user:", error);
-        return c.json({ error: "Failed to create user" }, 500);
+        return res.status(500).json({ error: "Failed to create user" });
     }
 };
 
-export const updateUser = async (c: Context<{ Bindings: Bindings, Variables: Variables }>) => {
+export const updateUser = async (req: Request, res: Response) => {
     try {
-        const id = c.req.param('id');
-        const { username, password, role, name, department } = await c.req.json();
-        const prisma = getPrisma(c.env.DATABASE_URL);
+        const id = req.params.id as string;
+        const { username, password, role, name, department } = req.body;
         
         let updateData: any = {};
         if (username) updateData.username = username;
@@ -81,33 +77,31 @@ export const updateUser = async (c: Context<{ Bindings: Bindings, Variables: Var
             include: { department: true }
         });
         
-        return c.json(updatedUser);
+        return res.json(updatedUser);
     } catch (error) {
         console.error("Error updating user:", error);
-        return c.json({ error: "Failed to update user" }, 500);
+        return res.status(500).json({ error: "Failed to update user" });
     }
 };
 
-export const deleteUser = async (c: Context<{ Bindings: Bindings, Variables: Variables }>) => {
+export const deleteUser = async (req: Request, res: Response) => {
     try {
-        const id = c.req.param('id');
-        const prisma = getPrisma(c.env.DATABASE_URL);
+        const id = req.params.id as string;
         await prisma.user.delete({ where: { id } });
-        return c.body(null, 204);
+        return res.status(204).send();
     } catch (error) {
         console.error("Error deleting user:", error);
-        return c.json({ error: "Failed to delete user" }, 500);
+        return res.status(500).json({ error: "Failed to delete user" });
     }
 };
 
-export const updatePermissions = async (c: Context<{ Bindings: Bindings, Variables: Variables }>) => {
+export const updatePermissions = async (req: Request, res: Response) => {
     try {
-        const id = c.req.param('id');
-        const { permissions } = await c.req.json();
-        const prisma = getPrisma(c.env.DATABASE_URL);
+        const id = req.params.id as string;
+        const { permissions } = req.body;
         
         if (!Array.isArray(permissions)) {
-            return c.json({ error: "Permissions must be an array" }, 400);
+            return res.status(400).json({ error: "Permissions must be an array" });
         }
 
         const updatedUser = await prisma.user.update({
@@ -116,9 +110,9 @@ export const updatePermissions = async (c: Context<{ Bindings: Bindings, Variabl
             include: { department: true }
         });
         
-        return c.json(updatedUser);
+        return res.json(updatedUser);
     } catch (error) {
         console.error("Error updating permissions:", error);
-        return c.json({ error: "Failed to update permissions" }, 500);
+        return res.status(500).json({ error: "Failed to update permissions" });
     }
 };

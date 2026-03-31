@@ -1,11 +1,15 @@
-import { Hono } from 'hono';
-import { getTransactions, createTransaction, deleteTransaction } from '../controllers/finance.controller';
-import { authorizeAdmin, Bindings, Variables } from '../middleware/auth.middleware';
+import { Router } from 'express';
+import { getTransactions, createTransaction, deleteTransaction, getFinanceCategories, getFinanceSummary } from '../controllers/finance.controller';
+import { authenticateToken, authorizeAdmin } from '../middleware/auth.middleware';
+import { upload } from '../middleware/upload';
 
-const router = new Hono<{ Bindings: Bindings, Variables: Variables }>();
+const router = Router();
 
 router.get('/', getTransactions);
-router.post('/', authorizeAdmin, createTransaction);
-router.delete('/:id', authorizeAdmin, deleteTransaction);
+router.get('/categories', getFinanceCategories);
+router.get('/summary', getFinanceSummary);
+
+router.post('/', authenticateToken as any, authorizeAdmin as any, upload.single('evidence'), createTransaction);
+router.delete('/:id', authenticateToken as any, authorizeAdmin as any, deleteTransaction);
 
 export default router;

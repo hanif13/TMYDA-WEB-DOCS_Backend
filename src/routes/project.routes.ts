@@ -1,19 +1,20 @@
-import { Hono } from 'hono';
+import { Router } from 'express';
 import { getAnnualPlans, getAnnualYears, createProject, createAnnualPlan, updateProject, updateAnnualPlan, deleteProject, deleteAnnualPlan, createProjectBulk } from '../controllers/project.controller';
-import { authorizeAdmin, Bindings, Variables } from '../middleware/auth.middleware';
+import { authenticateToken, authorizeAdmin } from '../middleware/auth.middleware';
+import { upload } from '../middleware/upload';
 
-const router = new Hono<{ Bindings: Bindings, Variables: Variables }>();
+const router = Router();
 
 router.get('/plans', getAnnualPlans);
 router.get('/plans/years', getAnnualYears);
-router.post('/plans', authorizeAdmin, createAnnualPlan);
-router.patch('/plans/:id', authorizeAdmin, updateAnnualPlan);
-router.delete('/plans/:id', authorizeAdmin, deleteAnnualPlan);
-router.post('/bulk', authorizeAdmin, createProjectBulk);
-router.post('/', authorizeAdmin, createProject);
+router.post('/plans', authenticateToken as any, authorizeAdmin as any, createAnnualPlan);
+router.patch('/plans/:id', authenticateToken as any, authorizeAdmin as any, updateAnnualPlan);
+router.delete('/plans/:id', authenticateToken as any, authorizeAdmin as any, deleteAnnualPlan);
+router.post('/bulk', authenticateToken as any, authorizeAdmin as any, createProjectBulk);
+router.post('/', authenticateToken as any, authorizeAdmin as any, createProject);
 
-// In Hono, we handle multiple file uploads in the controller
-router.patch('/:id', authorizeAdmin, updateProject);
-router.delete('/:id', authorizeAdmin, deleteProject);
+// Handle multiple images for project summary
+router.patch('/:id', authenticateToken as any, authorizeAdmin as any, upload.array('images', 10), updateProject);
+router.delete('/:id', authenticateToken as any, authorizeAdmin as any, deleteProject);
 
 export default router;
