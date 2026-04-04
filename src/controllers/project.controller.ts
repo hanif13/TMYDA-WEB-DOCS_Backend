@@ -222,6 +222,11 @@ export const deleteProject = async (req: Request, res: Response) => {
             return res.status(404).json({ error: "Project not found" });
         }
 
+        // Delete all linked transactions first
+        await prisma.transaction.deleteMany({
+            where: { projectId: id }
+        });
+
         await prisma.project.delete({
             where: { id }
         });
@@ -266,7 +271,15 @@ export const deleteAnnualPlan = async (req: Request, res: Response) => {
     try {
         const id = req.params.id as string;
         
+        // First find all project IDs in this plan to delete their transactions
+        const projectIds = (await prisma.project.findMany({
+            where: { annualPlanId: id },
+            select: { id: true }
+        })).map(p => p.id);
+
         await prisma.$transaction([
+            // Delete transactions linked to projects in this plan
+            prisma.transaction.deleteMany({ where: { projectId: { in: projectIds } } }),
             prisma.project.deleteMany({ where: { annualPlanId: id } }),
             prisma.annualPlan.delete({ where: { id } })
         ]);

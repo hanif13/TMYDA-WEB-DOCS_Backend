@@ -37,10 +37,44 @@ export const createDocument = async (req: Request, res: Response) => {
         let realDeptId = departmentId;
         let realCatId = categoryId;
         let realUploaderId = uploadedById;
+        const docYear = thaiYear ? Number(thaiYear) : (yearBody ? Number(yearBody) : 2567);
 
-        if (departmentId && !isUUID(departmentId)) {
-            const dept = await prisma.department.findUnique({ where: { name: departmentId === "ส่วนกลาง" ? "สำนักอำนวยการ" : departmentId } });
-            if (dept) realDeptId = dept.id;
+        if (departmentId) {
+            let dept;
+            if (isUUID(departmentId)) {
+                dept = await prisma.department.findUnique({ where: { id: departmentId } });
+            } else {
+                dept = await prisma.department.findFirst({ 
+                    where: { name: departmentId === "ส่วนกลาง" ? "สำนักอำนวยการ" : departmentId },
+                    orderBy: { thaiYear: 'desc' }
+                });
+            }
+
+            if (dept) {
+                // Check if this department's year matches the document's year
+                if (dept.name && dept.thaiYear !== docYear) {
+                    // Try to find the same department name for the document's specific year
+                    let yearDept = await prisma.department.findFirst({
+                        where: { name: dept.name, thaiYear: docYear }
+                    });
+
+                    // If it doesn't exist for the current year, auto-create it
+                    if (!yearDept) {
+                        yearDept = await prisma.department.create({
+                            data: {
+                                name: dept.name,
+                                subDepts: dept.subDepts || [],
+                                theme: dept.theme || null,
+                                thaiYear: docYear,
+                                order: dept.order || 0
+                            }
+                        });
+                    }
+                    realDeptId = yearDept.id;
+                } else {
+                    realDeptId = dept.id;
+                }
+            }
         }
 
         if (categoryId && !isUUID(categoryId)) {
@@ -133,7 +167,10 @@ export const updateDocument = async (req: Request, res: Response) => {
         
         if (departmentId) {
             if (!isUUID(departmentId)) {
-                const dept = await prisma.department.findUnique({ where: { name: departmentId === "ส่วนกลาง" ? "สำนักอำนวยการ" : departmentId } });
+                const dept = await prisma.department.findFirst({ 
+                    where: { name: departmentId === "ส่วนกลาง" ? "สำนักอำนวยการ" : departmentId },
+                    orderBy: { thaiYear: 'desc' }
+                });
                 if (dept) updateData.departmentId = dept.id;
             } else {
                 updateData.departmentId = departmentId;

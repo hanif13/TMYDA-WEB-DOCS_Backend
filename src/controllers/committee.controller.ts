@@ -4,7 +4,15 @@ import { supabaseAdmin } from '../lib/supabase';
 
 export const getCommitteeMembers = async (req: Request, res: Response) => {
     try {
+        const { year } = req.query;
+        let where: any = {};
+        
+        if (year) {
+            where.thaiYear = parseInt(year.toString());
+        }
+
         const members = await prisma.committeeMember.findMany({
+            where,
             include: { department: true },
             orderBy: { order: 'asc' }
         });
@@ -48,7 +56,7 @@ export const createCommitteeMember = async (req: Request, res: Response) => {
                 occupation: occupation || null,
                 order: order ? parseInt(order.toString()) : 0,
                 photoUrl,
-                thaiYear: thaiYear ? Number(thaiYear) : 2569
+                thaiYear: thaiYear ? Number(thaiYear) : 2567
             },
             include: { department: true }
         });
@@ -74,6 +82,7 @@ export const updateCommitteeMember = async (req: Request, res: Response) => {
         if (email !== undefined) updateData.email = email;
         if (occupation !== undefined) updateData.occupation = occupation;
         if (order !== undefined) updateData.order = parseInt(order.toString());
+        if (req.body.thaiYear !== undefined) updateData.thaiYear = Number(req.body.thaiYear);
 
         if (file) {
             const extension = file.originalname.split('.').pop() || 'tmp';
@@ -132,7 +141,8 @@ export const createCommitteeBulk = async (req: Request, res: Response) => {
                 phoneNumber: comm.phoneNumber || null,
                 email: comm.email || null,
                 photoUrl: comm.photoUrl || comm.imageUrl || "",
-                order: comm.order || 0
+                order: comm.order || 0,
+                thaiYear: comm.thaiYear ? Number(comm.thaiYear) : 2567
             }))
         });
 
@@ -140,5 +150,32 @@ export const createCommitteeBulk = async (req: Request, res: Response) => {
     } catch (error) {
         console.error("Error bulk creating committee members:", error);
         return res.status(500).json({ error: "Failed to import committee members" });
+    }
+};
+
+export const reorderCommitteeMembers = async (req: Request, res: Response) => {
+    try {
+        const { orders } = req.body; // Array of { id, order, departmentId? }
+        
+        if (!Array.isArray(orders)) {
+            return res.status(400).json({ error: "Invalid orders format" });
+        }
+
+        await prisma.$transaction(
+            orders.map((item: { id: string, order: number, departmentId?: string }) => 
+                prisma.committeeMember.update({
+                    where: { id: item.id },
+                    data: { 
+                        order: item.order,
+                        departmentId: item.departmentId
+                    }
+                })
+            )
+        );
+
+        return res.json({ message: "Reordered successfully" });
+    } catch (error) {
+        console.error("Error reordering committee members:", error);
+        return res.status(500).json({ error: "Failed to reorder committee members" });
     }
 };

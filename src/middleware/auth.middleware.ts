@@ -35,10 +35,29 @@ export const authenticateToken = async (req: AuthRequest, res: Response, next: N
     }
 };
 
+// Allow SUPER_ADMIN and ADMIN
 export const authorizeAdmin = async (req: AuthRequest, res: Response, next: NextFunction) => {
     const user = req.user;
     if (user?.role !== 'ADMIN' && user?.role !== 'SUPER_ADMIN') {
         return res.status(403).json({ error: 'คุณไม่มีสิทธิ์ในการดำเนินการนี้ (Admin Only)' });
+    }
+    next();
+};
+
+// Allow SUPER_ADMIN and FINANCE for finance write operations
+export const authorizeFinance = async (req: AuthRequest, res: Response, next: NextFunction) => {
+    const user = req.user;
+    if (user?.role !== 'FINANCE' && user?.role !== 'SUPER_ADMIN') {
+        return res.status(403).json({ error: 'คุณไม่มีสิทธิ์ในการดำเนินการนี้ (Finance Only)' });
+    }
+    next();
+};
+
+// Allow SUPER_ADMIN only
+export const authorizeSuperAdmin = async (req: AuthRequest, res: Response, next: NextFunction) => {
+    const user = req.user;
+    if (user?.role !== 'SUPER_ADMIN') {
+        return res.status(403).json({ error: 'คุณไม่มีสิทธิ์ในการดำเนินการนี้ (Super Admin Only)' });
     }
     next();
 };

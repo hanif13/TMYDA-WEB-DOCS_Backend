@@ -12,9 +12,12 @@ model User {
   username     String      @unique
   passwordHash String
   name         String
-  role         String      @default("USER")
+  role         String      @default("VIEWER")
   permissions  String[]    @default(["VIEW"])
   departmentId String?
+  email        String?
+  phoneNumber  String?
+  facebook     String?
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
   documents    Document[]  @relation("DocumentUploader")
@@ -22,17 +25,25 @@ model User {
 }
 
 model Department {
-  id               String            @id @default(uuid())
-  name             String            @unique
-  subDepts         String[]
-  theme            String?
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
-  committeeMembers CommitteeMember[]
-  documents        Document[]
-  projects         Project[]
-  transactions     Transaction[]
-  users            User[]
+  id                     String            @id @default(uuid())
+  name                   String
+  subDepts               String[]
+  theme                  String?
+  createdAt              DateTime          @default(now())
+  updatedAt              DateTime          @updatedAt
+  order                  Int               @default(0)
+  thaiYear               Int               @default(2567)
+  isCommitteeOnly        Boolean           @default(false)
+  isHiddenInCommittee    Boolean           @default(false)
+  hiddenInCommitteeYears Int[]             @default([])
+  committeeMembers       CommitteeMember[]
+  documents              Document[]
+  projects               Project[]
+  transactions           Transaction[]
+  users                  User[]
+
+  @@unique([name, thaiYear])
+  @@index([thaiYear])
 }
 
 model DocumentCategory {
@@ -137,6 +148,7 @@ model Transaction {
   thaiYear     Int        @default(2569)
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
+  note         String?
   department   Department @relation(fields: [departmentId], references: [id])
   project      Project?   @relation(fields: [projectId], references: [id])
 
