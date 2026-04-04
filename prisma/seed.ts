@@ -9,190 +9,76 @@ const prisma = new PrismaClient();
 async function main() {
     console.log("Starting DB Seed...");
 
-    // Cleanup existing data
-    await prisma.transaction.deleteMany();
-    await prisma.document.deleteMany();
-    await prisma.project.deleteMany();
-    await prisma.committeeMember.deleteMany();
-    await prisma.user.deleteMany();
-    await prisma.annualPlan.deleteMany();
-    await prisma.documentCategory.deleteMany();
-    await prisma.department.deleteMany();
+    // Seed Departments (Check if they exist first)
+    const departments = [
+        { id: "admin", name: "สำนักอำนวยการ", theme: "amber", subDepts: ["ผู้อำนวยการสำนัก", "รองผู้อำนวยการสำนัก", "หน่วยงานสนับสนุนและติดตาม", "หน่วยงานสมาชิกสัมพันธ์", "หน่วยงานสื่อองค์กร", "หน่วยงานงบประมาณ", "หน่วยงานวิชาการ"] },
+        { id: "tmyda", name: "สมาคมพัฒนาเยาวชนมุสลิมไทย", theme: "blue", subDepts: ["นายกสมาคมฯ", "อุปนายกสมาคมฯ", "สำนักเลขานุการและการจัดการ", "สำนักงบประมาณ", "สำนักวิชาการ", "สำนักสานสัมพันธ์เยาวชน", "สำนักสื่อและประชาสัมพันธ์", "สำนักบริหารโครงการ"] },
+        { id: "women", name: "สำนักกิจการสตรี สมาคมฯ", theme: "pink", subDepts: ["ผู้อำนวยการสำนัก", "รองผู้อำนวยการสำนัก", "เลขานุการ", "เหรัญญิก", "หน่วยงานสื่อและประชาสัมพันธ์", "หน่วยงานบุคลากร", "หน่วยงานกิจกรรม", "หน่วยงานวิชาการ"] },
+        { id: "family", name: "ครอบครัวฟิตยะตุลฮัก", theme: "emerald", subDepts: ["ผู้จัดการครอบครัว", "เลขานุการและการเงิน", "หน่วยงานวิชาการและตัรบียะห์", "หน่วยงานสื่อ", "ที่ปรึกษาประจำสาขา"] }
+    ];
 
-    // Seed Departments
-    const dept1 = await prisma.department.create({
-        data: {
-            id: "admin",
-            name: "สำนักอำนวยการ",
-            theme: "amber",
-            subDepts: ["ผู้อำนวยการสำนัก", "รองผู้อำนวยการสำนัก", "หน่วยงานสนับสนุนและติดตาม", "หน่วยงานสมาชิกสัมพันธ์", "หน่วยงานสื่อองค์กร", "หน่วยงานงบประมาณ", "หน่วยงานวิชาการ"]
+    for (const dept of departments) {
+        const existing = await prisma.department.findUnique({ where: { id: dept.id } });
+        if (!existing) {
+            await prisma.department.create({ data: dept });
+            console.log(`✅ Created Dept: ${dept.name}`);
+        } else {
+            console.log(`⌛ Dept already exists: ${dept.name}`);
         }
-    });
-    console.log(`Created Dept: ${dept1.name}`);
+    }
 
-    const dept2 = await prisma.department.create({
-        data: {
-            id: "tmyda",
-            name: "สมาคมพัฒนาเยาวชนมุสลิมไทย",
-            theme: "blue",
-            subDepts: ["นายกสมาคมฯ", "อุปนายกสมาคมฯ", "สำนักเลขานุการและการจัดการ", "สำนักงบประมาณ", "สำนักวิชาการ", "สำนักสานสัมพันธ์เยาวชน", "สำนักสื่อและประชาสัมพันธ์", "สำนักบริหารโครงการ"]
-        }
-    });
-    console.log(`Created Dept: ${dept2.name}`);
-
-    const dept3 = await prisma.department.create({
-        data: {
-            id: "women",
-            name: "สำนักกิจการสตรี สมาคมฯ",
-            theme: "pink",
-            subDepts: ["ผู้อำนวยการสำนัก", "รองผู้อำนวยการสำนัก", "เลขานุการ", "เหรัญญิก", "หน่วยงานสื่อและประชาสัมพันธ์", "หน่วยงานบุคลากร", "หน่วยงานกิจกรรม", "หน่วยงานวิชาการ"]
-        }
-    });
-    console.log(`Created Dept: ${dept3.name}`);
-
-    const dept4 = await prisma.department.create({
-        data: {
-            id: "family",
-            name: "ครอบครัวฟิตยะตุลฮัก",
-            theme: "emerald",
-            subDepts: ["ผู้จัดการครอบครัว", "เลขานุการและการเงิน", "หน่วยงานวิชาการและตัรบียะห์", "หน่วยงานสื่อ", "ที่ปรึกษาประจำสาขา"]
-        }
-    });
-    console.log(`Created Dept: ${dept4.name}`);
-
-    // Seed User
-    const passwordHash = await bcrypt.hash("password123", 10);
-    const admin = await prisma.user.create({
-        data: {
-            username: "admin",
-            passwordHash: passwordHash,
-            name: "ผู้ดูแลระบบ (Super Admin)",
-            role: "SUPER_ADMIN",
-            permissions: ["VIEW", "EDIT", "MANAGE_USERS"],
-            departmentId: dept1.id
-        }
-    });
+    // Seed Admin User (Check if admin exists first)
+    const existingAdmin = await prisma.user.findUnique({ where: { username: "admin" } });
+    if (!existingAdmin) {
+        const passwordHash = await bcrypt.hash("password123", 10);
+        await prisma.user.create({
+            data: {
+                username: "admin",
+                passwordHash: passwordHash,
+                name: "ผู้ดูแลระบบ (Super Admin)",
+                role: "SUPER_ADMIN",
+                permissions: ["VIEW", "EDIT", "MANAGE_USERS"],
+                departmentId: "admin"
+            }
+        });
+        console.log("✅ Created Admin User: admin");
+    } else {
+        console.log("⌛ Admin user already exists.");
+    }
 
     // Seed Categories
-    const catProject = await prisma.documentCategory.create({
-        data: { name: "ประเภทเอกสารโครงการ" }
-    });
-    const catReport = await prisma.documentCategory.create({
-        data: { name: "ประเภทเอกสารรายงานผลการดำเนินโครงการ" }
-    });
+    const categories = [
+        "ประเภทเอกสารโครงการ",
+        "ประเภทเอกสารรายงานผลการดำเนินโครงการ",
+        "ประเภทเอกสารภายใน",
+        "ประเภทเอกสารประกาศหรือคำสั่ง",
+        "ประเภทเอกสารภายนอก"
+    ];
 
-    const catInternal = await prisma.documentCategory.create({
-        data: { name: "ประเภทเอกสารภายใน" }
-    });
-    const catOrder = await prisma.documentCategory.create({
-        data: { name: "ประเภทเอกสารประกาศหรือคำสั่ง" }
-    });
-    const catExternal = await prisma.documentCategory.create({
-        data: { name: "ประเภทเอกสารภายนอก" }
-    });
+    for (const name of categories) {
+        const existing = await prisma.documentCategory.findUnique({ where: { name } });
+        if (!existing) {
+            await prisma.documentCategory.create({ data: { name } });
+            console.log(`✅ Created Category: ${name}`);
+        }
+    }
 
     // Seed Plans
-    const plan2567 = await prisma.annualPlan.create({
-        data: {
-            year: 2024,
-            thaiYear: 2567,
-            label: "แผนงานและโครงการประจำปี พ.ศ. 2567",
-            totalBudget: 400000,
-            totalUsed: 350000
+    const plans = [
+        { year: 2024, thaiYear: 2567, label: "แผนงานและโครงการประจำปี พ.ศ. 2567", totalBudget: 400000, totalUsed: 350000 },
+        { year: 2025, thaiYear: 2568, label: "แผนงานและโครงการประจำปี พ.ศ. 2568", totalBudget: 450000, totalUsed: 200000 },
+        { year: 2026, thaiYear: 2569, label: "แผนงานและโครงการประจำปี พ.ศ. 2569", totalBudget: 480000, totalUsed: 0 }
+    ];
+
+    for (const plan of plans) {
+        const existing = await prisma.annualPlan.findUnique({ where: { year: plan.year } });
+        if (!existing) {
+            await prisma.annualPlan.create({ data: plan });
+            console.log(`✅ Created Plan: ${plan.thaiYear}`);
         }
-    });
+    }
 
-    const plan2568 = await prisma.annualPlan.create({
-        data: {
-            year: 2025,
-            thaiYear: 2568,
-            label: "แผนงานและโครงการประจำปี พ.ศ. 2568",
-            totalBudget: 450000,
-            totalUsed: 200000
-        }
-    });
-
-    const plan2569 = await prisma.annualPlan.create({
-        data: {
-            year: 2026,
-            thaiYear: 2569,
-            label: "แผนงานและโครงการประจำปี พ.ศ. 2569",
-            totalBudget: 480000,
-            totalUsed: 0
-        }
-    });
-    console.log("Plans created (2567, 2568, 2569).");
-
-    // Seed Projects for different years
-    await prisma.project.create({
-        data: {
-            name: "ค่ายเยาวชนต้านภัยยาเสพติด (2567)",
-            departmentId: dept2.id,
-            projectType: "โครงการในแผน",
-            lead: "นายกสมาคมฯ",
-            budget: 50000,
-            quarter: 2,
-            annualPlanId: plan2567.id,
-            status: "completed"
-        }
-    });
-
-    await prisma.project.create({
-        data: {
-            name: "สัมมนาวิชาการสตรีมุสลิม (2568)",
-            departmentId: dept3.id,
-            projectType: "โครงการในแผน",
-            lead: "ผอ.สำนักสตรี",
-            budget: 30000,
-            quarter: 1,
-            annualPlanId: plan2568.id,
-            status: "in_progress"
-        }
-    });
-
-    const project2569 = await prisma.project.create({
-        data: {
-            name: "อบรมจิตอาสาชุมชน (2569)",
-            departmentId: dept1.id,
-            projectType: "โครงการในแผน",
-            lead: "ผอ.สมชาย",
-            budget: 10000,
-            quarter: 1,
-            annualPlanId: plan2569.id,
-            status: "planned"
-        }
-    });
-
-    // Seed Transactions with thaiYear
-    await prisma.transaction.create({
-        data: {
-            date: new Date('2024-05-10').toISOString(),
-            title: "งบจัดโครงการค่ายเยาวชน",
-            type: "expense",
-            amount: 50000,
-            category: "project",
-            departmentId: dept2.id,
-            projectId: null,
-            thaiYear: 2567
-        }
-    });
-
-    await prisma.transaction.create({
-        data: {
-            date: new Date('2025-02-15').toISOString(),
-            title: "ค่าวิทยากรสัมมนาสตรี",
-            type: "expense",
-            amount: 15000,
-            category: "project",
-            departmentId: dept3.id,
-            projectId: null,
-            thaiYear: 2568
-        }
-    });
-
-    console.log("Projects and Transactions seeded.");
-
-    console.log("DB Seed Completed!");
+    console.log("DB Seed Sync Completed!");
 }
 
 main()
