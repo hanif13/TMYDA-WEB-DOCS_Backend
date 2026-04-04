@@ -5,8 +5,8 @@ import { upload } from '../middleware/upload';
 
 const router = Router();
 
-router.get('/categories', getDocumentCategories);
-router.get('/', getDocuments);
+router.get('/categories', authenticateToken as any, getDocumentCategories);
+router.get('/', authenticateToken as any, getDocuments);
 
 // Handle single document file upload
 router.post('/', authenticateToken as any, authorizeAdmin as any, upload.single('file'), createDocument);

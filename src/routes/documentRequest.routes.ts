@@ -4,7 +4,7 @@ import { authenticateToken, authorizeAdmin } from '../middleware/auth.middleware
 
 const router = Router();
 
-router.get('/', getDocumentRequests);
+router.get('/', authenticateToken as any, getDocumentRequests);
 router.post('/', authenticateToken as any, authorizeAdmin as any, createDocumentRequest);
 router.patch('/:id', authenticateToken as any, authorizeAdmin as any, updateDocumentRequest);
 router.delete('/:id', authenticateToken as any, authorizeAdmin as any, deleteDocumentRequest);

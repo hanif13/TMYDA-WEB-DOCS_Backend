@@ -10,7 +10,7 @@ import { authenticateToken } from '../middleware/auth.middleware';
 
 const router = Router();
 
-router.get('/', getDepartments);
+router.get('/', authenticateToken as any, getDepartments);
 router.post('/', authenticateToken, createDepartment);
 router.put('/reorder', authenticateToken, reorderDepartments);
 router.put('/:id', authenticateToken, updateDepartment);

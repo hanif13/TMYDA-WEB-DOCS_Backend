@@ -5,8 +5,8 @@ import { upload } from '../middleware/upload';
 
 const router = Router();
 
-router.get('/plans', getAnnualPlans);
-router.get('/plans/years', getAnnualYears);
+router.get('/plans', authenticateToken as any, getAnnualPlans);
+router.get('/plans/years', authenticateToken as any, getAnnualYears);
 router.post('/plans', authenticateToken as any, authorizeAdmin as any, createAnnualPlan);
 router.patch('/plans/:id', authenticateToken as any, authorizeAdmin as any, updateAnnualPlan);
 router.delete('/plans/:id', authenticateToken as any, authorizeAdmin as any, deleteAnnualPlan);

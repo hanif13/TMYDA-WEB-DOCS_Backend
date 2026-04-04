@@ -12,7 +12,7 @@ import { upload } from '../middleware/upload';
 
 const router = Router();
 
-router.get('/', getCommitteeMembers);
+router.get('/', authenticateToken as any, getCommitteeMembers);
 router.post('/bulk', authenticateToken as any, authorizeAdmin as any, createCommitteeBulk);
 router.put('/reorder', authenticateToken as any, authorizeAdmin as any, reorderCommitteeMembers);
 
