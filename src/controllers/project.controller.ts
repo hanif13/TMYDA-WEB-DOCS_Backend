@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { supabaseAdmin } from '../lib/supabase';
+import { syncAnnualPlanTotalUsed } from '../utils/budget.sync';
 
 export const getAnnualPlans = async (req: Request, res: Response) => {
     try {
@@ -125,6 +126,7 @@ export const updateProject = async (req: Request, res: Response) => {
         const actualPax = data.actualPax;
         const actualDate = data.actualDate;
         const actualBudget = data.actualBudget;
+        const actualBudgetExternal = data.actualBudgetExternal;
         const isUnplanned = data.isUnplanned;
         
         let months = data.months;
@@ -194,6 +196,7 @@ export const updateProject = async (req: Request, res: Response) => {
                 ...(actualPax !== undefined && { actualPax: Number(actualPax) }),
                 ...(actualDate !== undefined && { actualDate }),
                 ...(actualBudget !== undefined && { actualBudget: Number(actualBudget) }),
+                ...(actualBudgetExternal !== undefined && { actualBudgetExternal: Number(actualBudgetExternal) }),
                 ...(isUnplanned !== undefined && { isUnplanned: String(isUnplanned) === 'true' }),
                 ...(summaryImages && { summaryImages })
             },
@@ -201,6 +204,10 @@ export const updateProject = async (req: Request, res: Response) => {
                 department: true
             }
         });
+
+        if (updated.annualPlanId) {
+            await syncAnnualPlanTotalUsed(updated.annualPlanId);
+        }
         
         return res.json(updated);
     } catch (error) {
@@ -231,10 +238,7 @@ export const deleteProject = async (req: Request, res: Response) => {
             where: { id }
         });
 
-        await prisma.annualPlan.update({
-            where: { id: project.annualPlanId },
-            data: { totalBudget: { decrement: project.budget } }
-        });
+        await syncAnnualPlanTotalUsed(project.annualPlanId);
 
         return res.json({ message: "Project deleted successfully" });
     } catch (error) {

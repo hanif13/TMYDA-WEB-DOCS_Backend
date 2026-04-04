@@ -126,6 +126,7 @@ model Project {
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
   actualBudget    Float?
+  actualBudgetExternal Float @default(0)
   actualDate      String?
   documents       Document[]
   annualPlan      AnnualPlan    @relation(fields: [annualPlanId], references: [id])

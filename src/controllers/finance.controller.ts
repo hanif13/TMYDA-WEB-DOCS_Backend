@@ -1,24 +1,7 @@
 import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { supabaseAdmin } from '../lib/supabase';
-
-// Helper: recalculate and sync project.budgetUsed from its transactions
-async function syncProjectBudgetUsed(projectId: string) {
-    const projectTx = await prisma.transaction.findMany({
-        where: { projectId },
-        select: { type: true, amount: true }
-    });
-    const expense = projectTx
-        .filter(t => t.type === 'expense')
-        .reduce((sum, t) => sum + t.amount, 0);
-    const refund = projectTx
-        .filter(t => t.type === 'refund')
-        .reduce((sum, t) => sum + t.amount, 0);
-    await prisma.project.update({
-        where: { id: projectId },
-        data: { budgetUsed: expense - refund }
-    });
-}
+import { syncProjectBudgetUsed } from '../utils/budget.sync';
 
 export const getTransactions = async (req: Request, res: Response) => {
     try {
@@ -152,5 +135,67 @@ export const getFinanceSummary = async (req: Request, res: Response) => {
     } catch (error) {
         console.error("Error fetching finance summary:", error);
         return res.status(500).json({ error: "Failed to fetch summary" });
+    }
+};
+
+export const updateTransaction = async (req: Request, res: Response) => {
+    try {
+        const id = req.params.id as string;
+        const { date, type, departmentId, category, amount, title, thaiYear, docRef, projectId, months, note } = req.body;
+        const file = req.file;
+
+        const oldTx = await prisma.transaction.findUnique({ where: { id } });
+        if (!oldTx) return res.status(404).json({ error: "Transaction not found" });
+
+        let slipUrl = oldTx.slipUrl;
+        if (file) {
+            const extension = file.originalname.split('.').pop();
+            const fileName = `fin-${Date.now()}-${Math.round(Math.random() * 1e9)}.${extension}`;
+            const { data, error } = await supabaseAdmin.storage
+                .from('uploads')
+                .upload(`finance/${fileName}`, file.buffer, {
+                    contentType: file.mimetype,
+                    upsert: true
+                });
+
+            if (error) throw error;
+            const { data: { publicUrl } } = supabaseAdmin.storage
+                .from('uploads')
+                .getPublicUrl(`finance/${fileName}`);
+            slipUrl = publicUrl;
+        }
+
+        const transaction = await prisma.transaction.update({
+            where: { id },
+            data: {
+                ...(date && { date: date as string }),
+                ...(type && { type }),
+                ...(departmentId && { departmentId }),
+                ...(projectId !== undefined && { projectId: projectId || null }),
+                ...(months && { months: typeof months === 'string' ? JSON.parse(months) : months }),
+                ...(note !== undefined && { note: note || "" }),
+                ...(category && { category }),
+                ...(amount !== undefined && { amount: Number(amount) }),
+                ...(title && { title }),
+                ...(docRef !== undefined && { docRef: docRef || "" }),
+                slipUrl,
+                ...(thaiYear && { thaiYear: Number(thaiYear) })
+            },
+            include: { department: true, project: true }
+        });
+
+        // Sync project budgetUsed for old and new projects
+        const projectsToSync = new Set<string>();
+        if (oldTx.projectId) projectsToSync.add(oldTx.projectId);
+        if (transaction.projectId) projectsToSync.add(transaction.projectId);
+
+        for (const pId of projectsToSync) {
+            await syncProjectBudgetUsed(pId);
+        }
+
+        return res.json(transaction);
+    } catch (error) {
+        console.error("Error updating transaction:", error);
+        return res.status(500).json({ error: "Failed to update transaction" });
     }
 };
