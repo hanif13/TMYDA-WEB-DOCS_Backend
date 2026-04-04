@@ -9,120 +9,154 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.deleteTransaction = exports.createTransaction = exports.getTransactions = void 0;
+exports.getFinanceSummary = exports.getFinanceCategories = exports.deleteTransaction = exports.createTransaction = exports.getTransactions = void 0;
 const prisma_1 = require("../lib/prisma");
+const supabase_1 = require("../lib/supabase");
+// Helper: recalculate and sync project.budgetUsed from its transactions
+function syncProjectBudgetUsed(projectId) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const projectTx = yield prisma_1.prisma.transaction.findMany({
+            where: { projectId },
+            select: { type: true, amount: true }
+        });
+        const expense = projectTx
+            .filter(t => t.type === 'expense')
+            .reduce((sum, t) => sum + t.amount, 0);
+        const refund = projectTx
+            .filter(t => t.type === 'refund')
+            .reduce((sum, t) => sum + t.amount, 0);
+        yield prisma_1.prisma.project.update({
+            where: { id: projectId },
+            data: { budgetUsed: expense - refund }
+        });
+    });
+}
 const getTransactions = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { year } = req.query;
-        const filter = {};
+        const where = {};
         if (year)
-            filter.thaiYear = Number(year);
+            where.thaiYear = Number(year);
         const transactions = yield prisma_1.prisma.transaction.findMany({
-            where: filter,
-            include: {
-                department: true,
-                project: true,
-            },
-            orderBy: { createdAt: 'desc' }
+            where,
+            include: { department: true, project: true },
+            orderBy: { date: 'desc' }
         });
-        res.json(transactions);
+        return res.json(transactions);
     }
     catch (error) {
         console.error("Error fetching transactions:", error);
-        res.status(500).json({ error: "Failed to fetch transactions" });
+        return res.status(500).json({ error: "Failed to fetch transactions" });
     }
 });
 exports.getTransactions = getTransactions;
 const createTransaction = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const { date, title, type, amount, category, docRef, months, departmentId, projectId } = req.body;
-        // Handle file upload for slip
-        const slipUrl = req.file ? `/uploads/documents/${req.file.filename}` : req.body.slipUrl;
-        // Start a transaction to ensure data consistency
-        const transaction = yield prisma_1.prisma.$transaction((tx) => __awaiter(void 0, void 0, void 0, function* () {
-            const newTx = yield tx.transaction.create({
-                data: {
-                    date,
-                    title,
-                    type, // 'income', 'expense', or 'refund'
-                    amount: Number(amount),
-                    category: category || 'general',
-                    docRef,
-                    slipUrl,
-                    months: typeof months === 'string' ? JSON.parse(months) : (months || []),
-                    departmentId,
-                    projectId: projectId || null,
-                    thaiYear: req.body.thaiYear ? Number(req.body.thaiYear) : (req.body.year ? Number(req.body.year) : 2569)
-                },
-                include: {
-                    department: true,
-                    project: true,
-                }
+        const { date, type, departmentId, category, amount, title, thaiYear, year: yearBody, docRef, projectId, months, note } = req.body;
+        const file = req.file;
+        let slipUrl = "";
+        if (file) {
+            const extension = file.originalname.split('.').pop();
+            const fileName = `fin-${Date.now()}-${Math.round(Math.random() * 1e9)}.${extension}`;
+            const { data, error } = yield supabase_1.supabaseAdmin.storage
+                .from('uploads')
+                .upload(`finance/${fileName}`, file.buffer, {
+                contentType: file.mimetype,
+                upsert: true
             });
-            // Update Project and AnnualPlan budget usage for expense, refund, or project-related income
-            if (projectId && (type === 'expense' || type === 'refund' || type === 'income')) {
-                const project = yield tx.project.findUnique({
-                    where: { id: projectId },
-                    select: { annualPlanId: true }
-                });
-                if (project) {
-                    const adjustment = type === 'expense' ? Number(amount) : -Number(amount);
-                    // Update project-level total
-                    yield tx.project.update({
-                        where: { id: projectId },
-                        data: { budgetUsed: { increment: adjustment } }
-                    });
-                    // Update annual plan total
-                    yield tx.annualPlan.update({
-                        where: { id: project.annualPlanId },
-                        data: { totalUsed: { increment: adjustment } }
-                    });
-                }
-            }
-            return newTx;
-        }));
-        res.status(201).json(transaction);
+            if (error)
+                throw error;
+            const { data: { publicUrl } } = supabase_1.supabaseAdmin.storage
+                .from('uploads')
+                .getPublicUrl(`finance/${fileName}`);
+            slipUrl = publicUrl;
+        }
+        const thaiYearVal = thaiYear || yearBody;
+        const transaction = yield prisma_1.prisma.transaction.create({
+            data: {
+                date: date,
+                type,
+                departmentId,
+                projectId: projectId || null,
+                months: months ? (typeof months === 'string' ? JSON.parse(months) : months) : [],
+                note: note || "",
+                category: category || "",
+                amount: Number(amount),
+                title: title || "",
+                docRef: docRef || "",
+                slipUrl,
+                thaiYear: thaiYearVal ? Number(thaiYearVal) : 2569
+            },
+            include: { department: true, project: true }
+        });
+        // Sync project budgetUsed if linked to a project
+        if (transaction.projectId) {
+            yield syncProjectBudgetUsed(transaction.projectId);
+        }
+        return res.status(201).json(transaction);
     }
     catch (error) {
         console.error("Error creating transaction:", error);
-        res.status(500).json({ error: "Failed to create transaction" });
+        return res.status(500).json({ error: "Failed to create transaction" });
     }
 });
 exports.createTransaction = createTransaction;
 const deleteTransaction = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const { id } = req.params;
-        yield prisma_1.prisma.$transaction((tx) => __awaiter(void 0, void 0, void 0, function* () {
-            const transaction = yield tx.transaction.findUnique({
-                where: { id: String(id) },
-                include: { project: true }
-            });
-            if (!transaction) {
-                throw new Error("Transaction not found");
-            }
-            // Reverse budget updates
-            if (transaction.projectId && (transaction.type === 'expense' || transaction.type === 'refund' || transaction.type === 'income')) {
-                const adjustment = transaction.type === 'expense' ? -transaction.amount : transaction.amount;
-                yield tx.project.update({
-                    where: { id: transaction.projectId },
-                    data: { budgetUsed: { increment: adjustment } }
-                });
-                // Update annual plan total
-                const txWithProject = transaction;
-                if (txWithProject.project) {
-                    yield tx.annualPlan.update({
-                        where: { id: txWithProject.project.annualPlanId },
-                        data: { totalUsed: { increment: adjustment } }
-                    });
-                }
-            }
-            yield tx.transaction.delete({ where: { id: String(id) } });
-        }));
-        res.json({ message: "Transaction deleted successfully" });
+        const id = req.params.id;
+        // Find the transaction first to get projectId before deleting
+        const tx = yield prisma_1.prisma.transaction.findUnique({ where: { id } });
+        yield prisma_1.prisma.transaction.delete({ where: { id } });
+        // Sync project budgetUsed if it was linked to a project
+        if (tx === null || tx === void 0 ? void 0 : tx.projectId) {
+            yield syncProjectBudgetUsed(tx.projectId);
+        }
+        return res.status(204).send();
     }
     catch (error) {
         console.error("Error deleting transaction:", error);
-        res.status(500).json({ error: error.message || "Failed to delete transaction" });
+        return res.status(500).json({ error: "Failed to delete transaction" });
     }
 });
 exports.deleteTransaction = deleteTransaction;
+const getFinanceCategories = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        // Since TransactionCategory model doesn't exist, we'll return unique categories from Transactions
+        const transactions = yield prisma_1.prisma.transaction.findMany({
+            select: { category: true },
+            distinct: ['category']
+        });
+        const categories = transactions
+            .map((t) => ({ name: t.category }))
+            .filter((c) => c.name !== null);
+        return res.json(categories);
+    }
+    catch (error) {
+        console.error("Error fetching finance categories:", error);
+        return res.status(500).json({ error: "Failed to fetch categories" });
+    }
+});
+exports.getFinanceCategories = getFinanceCategories;
+const getFinanceSummary = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const { year } = req.query;
+        const where = {};
+        if (year)
+            where.thaiYear = Number(year);
+        const transactions = yield prisma_1.prisma.transaction.findMany({ where });
+        const summary = transactions.reduce((acc, curr) => {
+            const type = (curr.type || "").toUpperCase();
+            if (type === 'INCOME')
+                acc.totalIncome += curr.amount;
+            else if (type === 'EXPENSE')
+                acc.totalExpense += curr.amount;
+            return acc;
+        }, { totalIncome: 0, totalExpense: 0 });
+        return res.json(Object.assign(Object.assign({}, summary), { balance: summary.totalIncome - summary.totalExpense }));
+    }
+    catch (error) {
+        console.error("Error fetching finance summary:", error);
+        return res.status(500).json({ error: "Failed to fetch summary" });
+    }
+});
+exports.getFinanceSummary = getFinanceSummary;

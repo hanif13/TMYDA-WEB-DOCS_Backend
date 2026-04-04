@@ -11,6 +11,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.createProjectBulk = exports.deleteAnnualPlan = exports.updateAnnualPlan = exports.deleteProject = exports.updateProject = exports.createAnnualPlan = exports.createProject = exports.getAnnualYears = exports.getAnnualPlans = void 0;
 const prisma_1 = require("../lib/prisma");
+const supabase_1 = require("../lib/supabase");
 const getAnnualPlans = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const plans = yield prisma_1.prisma.annualPlan.findMany({
@@ -26,11 +27,11 @@ const getAnnualPlans = (req, res) => __awaiter(void 0, void 0, void 0, function*
             },
             orderBy: { year: 'desc' }
         });
-        res.json(plans);
+        return res.json(plans);
     }
     catch (error) {
         console.error("Error fetching plans:", error);
-        res.status(500).json({ error: "Failed to fetch annual plans" });
+        return res.status(500).json({ error: "Failed to fetch annual plans" });
     }
 });
 exports.getAnnualPlans = getAnnualPlans;
@@ -47,11 +48,11 @@ const getAnnualYears = (req, res) => __awaiter(void 0, void 0, void 0, function*
             },
             orderBy: { year: 'desc' }
         });
-        res.json(years);
+        return res.json(years);
     }
     catch (error) {
         console.error("Error fetching annual years:", error);
-        res.status(500).json({ error: "Failed to fetch annual years" });
+        return res.status(500).json({ error: "Failed to fetch annual years" });
     }
 });
 exports.getAnnualYears = getAnnualYears;
@@ -82,11 +83,11 @@ const createProject = (req, res) => __awaiter(void 0, void 0, void 0, function* 
             where: { id: annualPlanId },
             data: { totalBudget: { increment: Number(budget) } }
         });
-        res.status(201).json(newProject);
+        return res.status(201).json(newProject);
     }
     catch (error) {
         console.error("Error creating project:", error);
-        res.status(500).json({ error: "Failed to create project" });
+        return res.status(500).json({ error: "Failed to create project" });
     }
 });
 exports.createProject = createProject;
@@ -102,23 +103,55 @@ const createAnnualPlan = (req, res) => __awaiter(void 0, void 0, void 0, functio
                 totalUsed: 0
             }
         });
-        res.status(201).json(newPlan);
+        return res.status(201).json(newPlan);
     }
     catch (error) {
         console.error("Error creating annual plan:", error);
         if (error.code === 'P2002') {
             return res.status(400).json({ error: "Year already exists" });
         }
-        res.status(500).json({ error: "Failed to create annual plan" });
+        return res.status(500).json({ error: "Failed to create annual plan" });
     }
 });
 exports.createAnnualPlan = createAnnualPlan;
 const updateProject = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    const id = req.params.id;
     try {
-        const { name, departmentId, subDepartment, projectType, lead, budget, quarter, months, isStarted, status, budgetUsed, description, kpi, targetPax, actualPax, isUnplanned, completedMonths, actualDate, actualBudget } = req.body;
+        const id = req.params.id;
+        const data = req.body;
+        const files = req.files;
+        const name = data.name;
+        const departmentId = data.departmentId;
+        const subDepartment = data.subDepartment;
+        const projectType = data.projectType;
+        const lead = data.lead;
+        const budget = data.budget;
+        const quarter = data.quarter;
+        const isStarted = data.isStarted;
+        const status = data.status;
+        const budgetUsed = data.budgetUsed;
+        const description = data.description;
+        const kpi = data.kpi;
+        const targetPax = data.targetPax;
+        const actualPax = data.actualPax;
+        const actualDate = data.actualDate;
+        const actualBudget = data.actualBudget;
+        const isUnplanned = data.isUnplanned;
+        let months = data.months;
+        if (typeof months === 'string') {
+            try {
+                months = JSON.parse(months);
+            }
+            catch (e) { }
+        }
+        let completedMonths = data.completedMonths;
+        if (typeof completedMonths === 'string') {
+            try {
+                completedMonths = JSON.parse(completedMonths);
+            }
+            catch (e) { }
+        }
         // If budget is changing, we need to update the AnnualPlan totalBudget
-        if (budget !== undefined) {
+        if (budget !== undefined && budget !== null) {
             const oldProject = yield prisma_1.prisma.project.findUnique({
                 where: { id },
                 select: { budget: true, annualPlanId: true }
@@ -131,27 +164,43 @@ const updateProject = (req, res) => __awaiter(void 0, void 0, void 0, function* 
                 });
             }
         }
+        let summaryImages = undefined;
+        if (files && files.length > 0) {
+            summaryImages = yield Promise.all(files.map((file) => __awaiter(void 0, void 0, void 0, function* () {
+                const extension = file.originalname.split('.').pop() || 'tmp';
+                const fileName = `prj-${Date.now()}-${Math.round(Math.random() * 1e9)}.${extension}`;
+                const { data: uploadData, error } = yield supabase_1.supabaseAdmin.storage
+                    .from('uploads')
+                    .upload(`projects/${fileName}`, file.buffer, {
+                    contentType: file.mimetype,
+                    upsert: true
+                });
+                if (error)
+                    throw error;
+                const { data: { publicUrl } } = supabase_1.supabaseAdmin.storage
+                    .from('uploads')
+                    .getPublicUrl(`projects/${fileName}`);
+                return publicUrl;
+            })));
+        }
         const updated = yield prisma_1.prisma.project.update({
             where: { id },
-            data: Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign({}, (name && { name })), (departmentId && { departmentId })), (subDepartment !== undefined && { subDepartment })), (projectType && { projectType })), (lead && { lead })), (budget !== undefined && { budget: Number(budget) })), (quarter !== undefined && { quarter: Number(quarter) })), (months !== undefined && { months })), (completedMonths !== undefined && { completedMonths })), (isStarted !== undefined && { isStarted: Boolean(isStarted) })), (status && { status })), (budgetUsed !== undefined && { budgetUsed: Number(budgetUsed) })), (description !== undefined && { description })), (kpi !== undefined && { kpi })), (targetPax !== undefined && { targetPax: Number(targetPax) })), (actualPax !== undefined && { actualPax: Number(actualPax) })), (actualDate !== undefined && { actualDate })), (actualBudget !== undefined && { actualBudget: Number(actualBudget) })), (isUnplanned !== undefined && { isUnplanned: Boolean(isUnplanned) })), (req.files && Array.isArray(req.files) && req.files.length > 0 && {
-                summaryImages: req.files.map(f => `/uploads/documents/${f.filename}`)
-            })),
+            data: Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign({}, (name && { name })), (departmentId && { departmentId })), (subDepartment !== undefined && { subDepartment })), (projectType && { projectType })), (lead && { lead })), (budget !== undefined && { budget: Number(budget) })), (quarter !== undefined && { quarter: Number(quarter) })), (months !== undefined && { months })), (completedMonths !== undefined && { completedMonths })), (isStarted !== undefined && { isStarted: String(isStarted) === 'true' })), (status && { status })), (budgetUsed !== undefined && { budgetUsed: Number(budgetUsed) })), (description !== undefined && { description })), (kpi !== undefined && { kpi })), (targetPax !== undefined && { targetPax: Number(targetPax) })), (actualPax !== undefined && { actualPax: Number(actualPax) })), (actualDate !== undefined && { actualDate })), (actualBudget !== undefined && { actualBudget: Number(actualBudget) })), (isUnplanned !== undefined && { isUnplanned: String(isUnplanned) === 'true' })), (summaryImages && { summaryImages })),
             include: {
                 department: true
             }
         });
-        res.json(updated);
+        return res.json(updated);
     }
     catch (error) {
         console.error("Error updating project:", error);
-        res.status(500).json({ error: "Failed to update project" });
+        return res.status(500).json({ error: "Failed to update project" });
     }
 });
 exports.updateProject = updateProject;
 const deleteProject = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const id = req.params.id;
-        // Find project to get budget and annualPlanId before deleting
         const project = yield prisma_1.prisma.project.findUnique({
             where: { id },
             select: { budget: true, annualPlanId: true }
@@ -159,20 +208,22 @@ const deleteProject = (req, res) => __awaiter(void 0, void 0, void 0, function* 
         if (!project) {
             return res.status(404).json({ error: "Project not found" });
         }
-        // Delete project
+        // Delete all linked transactions first
+        yield prisma_1.prisma.transaction.deleteMany({
+            where: { projectId: id }
+        });
         yield prisma_1.prisma.project.delete({
             where: { id }
         });
-        // Update Annual Plan Total Budget
         yield prisma_1.prisma.annualPlan.update({
             where: { id: project.annualPlanId },
             data: { totalBudget: { decrement: project.budget } }
         });
-        res.json({ message: "Project deleted successfully" });
+        return res.json({ message: "Project deleted successfully" });
     }
     catch (error) {
         console.error("Error deleting project:", error);
-        res.status(500).json({ error: "Failed to delete project" });
+        return res.status(500).json({ error: "Failed to delete project" });
     }
 });
 exports.deleteProject = deleteProject;
@@ -184,30 +235,36 @@ const updateAnnualPlan = (req, res) => __awaiter(void 0, void 0, void 0, functio
             where: { id },
             data: Object.assign(Object.assign(Object.assign({}, (year && { year: Number(year) })), (thaiYear && { thaiYear: Number(thaiYear) })), (label && { label }))
         });
-        res.json(updated);
+        return res.json(updated);
     }
     catch (error) {
         console.error("Error updating annual plan:", error);
         if (error.code === 'P2002') {
             return res.status(400).json({ error: "Year already exists" });
         }
-        res.status(500).json({ error: "Failed to update annual plan" });
+        return res.status(500).json({ error: "Failed to update annual plan" });
     }
 });
 exports.updateAnnualPlan = updateAnnualPlan;
 const deleteAnnualPlan = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const id = req.params.id;
-        // Use a transaction to ensure both projects and the plan are deleted
+        // First find all project IDs in this plan to delete their transactions
+        const projectIds = (yield prisma_1.prisma.project.findMany({
+            where: { annualPlanId: id },
+            select: { id: true }
+        })).map(p => p.id);
         yield prisma_1.prisma.$transaction([
+            // Delete transactions linked to projects in this plan
+            prisma_1.prisma.transaction.deleteMany({ where: { projectId: { in: projectIds } } }),
             prisma_1.prisma.project.deleteMany({ where: { annualPlanId: id } }),
             prisma_1.prisma.annualPlan.delete({ where: { id } })
         ]);
-        res.json({ message: "Annual plan and associated projects deleted successfully" });
+        return res.json({ message: "Annual plan and associated projects deleted successfully" });
     }
     catch (error) {
         console.error("Error deleting annual plan:", error);
-        res.status(500).json({ error: "Failed to delete annual plan" });
+        return res.status(500).json({ error: "Failed to delete annual plan" });
     }
 });
 exports.deleteAnnualPlan = deleteAnnualPlan;
@@ -243,11 +300,11 @@ const createProjectBulk = (req, res) => __awaiter(void 0, void 0, void 0, functi
             where: { id: annualPlanId },
             data: { totalBudget: { increment: totalBudgetToAdd } }
         });
-        res.status(201).json({ message: "Imported successfully", count: result.count });
+        return res.status(201).json({ message: "Imported successfully", count: result.count });
     }
     catch (error) {
         console.error("Error bulk creating projects:", error);
-        res.status(500).json({ error: "Failed to import projects" });
+        return res.status(500).json({ error: "Failed to import projects" });
     }
 });
 exports.createProjectBulk = createProjectBulk;

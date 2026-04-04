@@ -16,7 +16,6 @@ exports.login = void 0;
 const prisma_1 = require("../lib/prisma");
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
-const auth_middleware_1 = require("../middleware/auth.middleware");
 const login = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     var _a;
     try {
@@ -36,13 +35,18 @@ const login = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
         if (!isPasswordValid) {
             return res.status(401).json({ error: 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง' });
         }
+        const secret = process.env.JWT_SECRET;
+        if (!secret) {
+            console.error('❌ JWT_SECRET is not set in environment.');
+            return res.status(500).json({ error: 'เซิร์ฟเวอร์ยังไม่พร้อมใช้งาน' });
+        }
         const token = jsonwebtoken_1.default.sign({
             userId: user.id,
             username: user.username,
             role: user.role,
             permissions: user.permissions
-        }, auth_middleware_1.JWT_SECRET, { expiresIn: '7d' });
-        res.json({
+        }, secret, { expiresIn: '7d' });
+        return res.json({
             token,
             user: {
                 id: user.id,
@@ -55,7 +59,8 @@ const login = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
         });
     }
     catch (error) {
-        res.status(500).json({ error: 'เกิดข้อผิดพลาดในการเข้าสู่ระบบ' });
+        console.error('Login error:', error);
+        return res.status(500).json({ error: 'เกิดข้อผิดพลาดในการเข้าสู่ระบบ' });
     }
 });
 exports.login = login;

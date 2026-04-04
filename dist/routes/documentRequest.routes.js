@@ -5,7 +5,7 @@ const documentRequest_controller_1 = require("../controllers/documentRequest.con
 const auth_middleware_1 = require("../middleware/auth.middleware");
 const router = (0, express_1.Router)();
 router.get('/', documentRequest_controller_1.getDocumentRequests);
-router.post('/', auth_middleware_1.authorizeAdmin, documentRequest_controller_1.createDocumentRequest);
-router.patch('/:id', auth_middleware_1.authorizeAdmin, documentRequest_controller_1.updateDocumentRequest);
-router.delete('/:id', auth_middleware_1.authorizeAdmin, documentRequest_controller_1.deleteDocumentRequest);
+router.post('/', auth_middleware_1.authenticateToken, auth_middleware_1.authorizeAdmin, documentRequest_controller_1.createDocumentRequest);
+router.patch('/:id', auth_middleware_1.authenticateToken, auth_middleware_1.authorizeAdmin, documentRequest_controller_1.updateDocumentRequest);
+router.delete('/:id', auth_middleware_1.authenticateToken, auth_middleware_1.authorizeAdmin, documentRequest_controller_1.deleteDocumentRequest);
 exports.default = router;

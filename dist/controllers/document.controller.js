@@ -9,8 +9,10 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.deleteDocument = exports.updateDocument = exports.linkDocumentToProject = exports.createDocument = exports.getDocuments = void 0;
+exports.getDocumentCategories = exports.deleteDocument = exports.updateDocument = exports.linkDocumentToProject = exports.createDocument = exports.getDocuments = void 0;
 const prisma_1 = require("../lib/prisma");
+const supabase_1 = require("../lib/supabase");
+const isUUID = (str) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
 const getDocuments = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { year } = req.query;
@@ -26,29 +28,63 @@ const getDocuments = (req, res) => __awaiter(void 0, void 0, void 0, function* (
             },
             orderBy: { createdAt: 'desc' }
         });
-        res.json(documents);
+        return res.json(documents);
     }
     catch (error) {
         console.error("Error fetching documents:", error);
-        res.status(500).json({ error: "Failed to fetch documents" });
+        return res.status(500).json({ error: "Failed to fetch documents" });
     }
 });
 exports.getDocuments = getDocuments;
 const createDocument = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const { docNo, name, departmentId, categoryId, uploadedById } = req.body;
+        console.log("Create Document Request Body:", req.body);
+        const { docNo, name, departmentId, categoryId, uploadedById, thaiYear, year: yearBody } = req.body;
+        const file = req.file;
+        console.log("File received:", file ? { name: file.originalname, size: file.size } : "No file");
         // Find real IDs if names were passed instead of UUIDs
         let realDeptId = departmentId;
         let realCatId = categoryId;
         let realUploaderId = uploadedById;
-        // Simple check if it's a UUID (very basic)
-        const isUUID = (str) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
-        if (!isUUID(departmentId)) {
-            const dept = yield prisma_1.prisma.department.findUnique({ where: { name: departmentId === "ส่วนกลาง" ? "สำนักอำนวยการ" : departmentId } });
-            if (dept)
-                realDeptId = dept.id;
+        const docYear = thaiYear ? Number(thaiYear) : (yearBody ? Number(yearBody) : 2567);
+        if (departmentId) {
+            let dept;
+            if (isUUID(departmentId)) {
+                dept = yield prisma_1.prisma.department.findUnique({ where: { id: departmentId } });
+            }
+            else {
+                dept = yield prisma_1.prisma.department.findFirst({
+                    where: { name: departmentId === "ส่วนกลาง" ? "สำนักอำนวยการ" : departmentId },
+                    orderBy: { thaiYear: 'desc' }
+                });
+            }
+            if (dept) {
+                // Check if this department's year matches the document's year
+                if (dept.name && dept.thaiYear !== docYear) {
+                    // Try to find the same department name for the document's specific year
+                    let yearDept = yield prisma_1.prisma.department.findFirst({
+                        where: { name: dept.name, thaiYear: docYear }
+                    });
+                    // If it doesn't exist for the current year, auto-create it
+                    if (!yearDept) {
+                        yearDept = yield prisma_1.prisma.department.create({
+                            data: {
+                                name: dept.name,
+                                subDepts: dept.subDepts || [],
+                                theme: dept.theme || null,
+                                thaiYear: docYear,
+                                order: dept.order || 0
+                            }
+                        });
+                    }
+                    realDeptId = yearDept.id;
+                }
+                else {
+                    realDeptId = dept.id;
+                }
+            }
         }
-        if (!isUUID(categoryId)) {
+        if (categoryId && !isUUID(categoryId)) {
             const cat = yield prisma_1.prisma.documentCategory.findUnique({ where: { name: categoryId } });
             if (cat)
                 realCatId = cat.id;
@@ -58,8 +94,25 @@ const createDocument = (req, res) => __awaiter(void 0, void 0, void 0, function*
             if (user)
                 realUploaderId = user.id;
         }
-        // The file path will be relative to the server for static serving
-        const filePath = req.file ? `/uploads/documents/${req.file.filename}` : "";
+        console.log("Resolved IDs:", { realDeptId, realCatId, realUploaderId });
+        let filePath = "";
+        if (file) {
+            const extension = file.originalname.split('.').pop() || 'tmp';
+            const fileName = `doc-${Date.now()}-${Math.round(Math.random() * 1e9)}.${extension}`;
+            const { data, error } = yield supabase_1.supabaseAdmin.storage
+                .from('uploads')
+                .upload(`documents/${fileName}`, file.buffer, {
+                contentType: file.mimetype,
+                upsert: true
+            });
+            if (error)
+                throw error;
+            const { data: { publicUrl } } = supabase_1.supabaseAdmin.storage
+                .from('uploads')
+                .getPublicUrl(`documents/${fileName}`);
+            filePath = publicUrl;
+        }
+        const thaiYearVal = thaiYear || yearBody;
         const newDoc = yield prisma_1.prisma.document.create({
             data: {
                 docNo,
@@ -68,7 +121,7 @@ const createDocument = (req, res) => __awaiter(void 0, void 0, void 0, function*
                 categoryId: realCatId,
                 uploadedById: realUploaderId,
                 filePath,
-                thaiYear: req.body.thaiYear ? Number(req.body.thaiYear) : (req.body.year ? Number(req.body.year) : 2569)
+                thaiYear: thaiYearVal ? Number(thaiYearVal) : 2569
             },
             include: {
                 category: true,
@@ -76,11 +129,16 @@ const createDocument = (req, res) => __awaiter(void 0, void 0, void 0, function*
                 uploadedBy: true
             }
         });
-        res.status(201).json(newDoc);
+        return res.status(201).json(newDoc);
     }
     catch (error) {
-        console.error("Error creating document:", error);
-        res.status(500).json({ error: "Failed to create document" });
+        console.error("Error creating document (DETAILED):", {
+            message: error.message,
+            stack: error.stack,
+            prismaCode: error.code,
+            prismaMeta: error.meta
+        });
+        return res.status(500).json({ error: "Failed to create document", detail: error.message });
     }
 });
 exports.createDocument = createDocument;
@@ -92,11 +150,11 @@ const linkDocumentToProject = (req, res) => __awaiter(void 0, void 0, void 0, fu
             where: { id: documentId },
             data: { projectId: projectId || null }
         });
-        res.json(updatedDoc);
+        return res.json(updatedDoc);
     }
     catch (error) {
         console.error("Error linking document:", error);
-        res.status(500).json({ error: "Failed to link document" });
+        return res.status(500).json({ error: "Failed to link document" });
     }
 });
 exports.linkDocumentToProject = linkDocumentToProject;
@@ -104,7 +162,7 @@ const updateDocument = (req, res) => __awaiter(void 0, void 0, void 0, function*
     try {
         const id = req.params.id;
         const { docNo, name, departmentId, categoryId, uploadedById } = req.body;
-        const isUUID = (str) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
+        const file = req.file;
         let updateData = {};
         if (docNo)
             updateData.docNo = docNo;
@@ -112,7 +170,10 @@ const updateDocument = (req, res) => __awaiter(void 0, void 0, void 0, function*
             updateData.name = name;
         if (departmentId) {
             if (!isUUID(departmentId)) {
-                const dept = yield prisma_1.prisma.department.findUnique({ where: { name: departmentId === "ส่วนกลาง" ? "สำนักอำนวยการ" : departmentId } });
+                const dept = yield prisma_1.prisma.department.findFirst({
+                    where: { name: departmentId === "ส่วนกลาง" ? "สำนักอำนวยการ" : departmentId },
+                    orderBy: { thaiYear: 'desc' }
+                });
                 if (dept)
                     updateData.departmentId = dept.id;
             }
@@ -133,8 +194,21 @@ const updateDocument = (req, res) => __awaiter(void 0, void 0, void 0, function*
         if (uploadedById && uploadedById !== "user_id_placeholder") {
             updateData.uploadedById = uploadedById;
         }
-        if (req.file) {
-            updateData.filePath = `/uploads/documents/${req.file.filename}`;
+        if (file) {
+            const extension = file.originalname.split('.').pop() || 'tmp';
+            const fileName = `doc-${Date.now()}-${Math.round(Math.random() * 1e9)}.${extension}`;
+            const { data, error } = yield supabase_1.supabaseAdmin.storage
+                .from('uploads')
+                .upload(`documents/${fileName}`, file.buffer, {
+                contentType: file.mimetype,
+                upsert: true
+            });
+            if (error)
+                throw error;
+            const { data: { publicUrl } } = supabase_1.supabaseAdmin.storage
+                .from('uploads')
+                .getPublicUrl(`documents/${fileName}`);
+            updateData.filePath = publicUrl;
         }
         const updatedDoc = yield prisma_1.prisma.document.update({
             where: { id },
@@ -145,11 +219,11 @@ const updateDocument = (req, res) => __awaiter(void 0, void 0, void 0, function*
                 uploadedBy: true
             }
         });
-        res.json(updatedDoc);
+        return res.json(updatedDoc);
     }
     catch (error) {
         console.error("Error updating document:", error);
-        res.status(500).json({ error: "Failed to update document" });
+        return res.status(500).json({ error: "Failed to update document" });
     }
 });
 exports.updateDocument = updateDocument;
@@ -157,11 +231,24 @@ const deleteDocument = (req, res) => __awaiter(void 0, void 0, void 0, function*
     try {
         const id = req.params.id;
         yield prisma_1.prisma.document.delete({ where: { id } });
-        res.status(204).send();
+        return res.status(204).send();
     }
     catch (error) {
         console.error("Error deleting document:", error);
-        res.status(500).json({ error: "Failed to delete document" });
+        return res.status(500).json({ error: "Failed to delete document" });
     }
 });
 exports.deleteDocument = deleteDocument;
+const getDocumentCategories = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const categories = yield prisma_1.prisma.documentCategory.findMany({
+            orderBy: { name: 'asc' }
+        });
+        return res.json(categories);
+    }
+    catch (error) {
+        console.error("Error fetching categories:", error);
+        return res.status(500).json({ error: "Failed to fetch categories" });
+    }
+});
+exports.getDocumentCategories = getDocumentCategories;

@@ -5,7 +5,11 @@ const finance_controller_1 = require("../controllers/finance.controller");
 const auth_middleware_1 = require("../middleware/auth.middleware");
 const upload_1 = require("../middleware/upload");
 const router = (0, express_1.Router)();
+// Read routes — any authenticated user can view
 router.get('/', finance_controller_1.getTransactions);
-router.post('/', auth_middleware_1.authorizeAdmin, upload_1.upload.single('file'), finance_controller_1.createTransaction);
-router.delete('/:id', auth_middleware_1.authorizeAdmin, finance_controller_1.deleteTransaction);
+router.get('/categories', finance_controller_1.getFinanceCategories);
+router.get('/summary', finance_controller_1.getFinanceSummary);
+// Write routes — SUPER_ADMIN and FINANCE only
+router.post('/', auth_middleware_1.authenticateToken, auth_middleware_1.authorizeFinance, upload_1.upload.single('evidence'), finance_controller_1.createTransaction);
+router.delete('/:id', auth_middleware_1.authenticateToken, auth_middleware_1.authorizeFinance, finance_controller_1.deleteTransaction);
 exports.default = router;
