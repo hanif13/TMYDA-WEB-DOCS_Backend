@@ -1,7 +1,10 @@
 # ─── Backend Dockerfile (Multi-stage) ───
 
 # Stage 1: Install dependencies & build
-FROM node:20-alpine AS builder
+FROM node:20-slim AS builder
+
+# Install build dependencies for Debian
+RUN apt-get update && apt-get install -y openssl python3 build-essential
 
 WORKDIR /app
 
@@ -24,7 +27,10 @@ COPY src ./src/
 RUN npm run build
 
 # Stage 2: Production image
-FROM node:20-alpine AS runner
+FROM node:20-slim AS runner
+
+# Install necessary libraries for Debian (openssl is crucial for Prisma)
+RUN apt-get update && apt-get install -y openssl libc6 && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
