@@ -63,31 +63,15 @@ async function main() {
             console.log(`✅ Created Category: ${name}`);
         }
     }
-
-    // Seed Plans
-    const plans = [
-        { year: 2024, thaiYear: 2567, label: "แผนงานและโครงการประจำปี พ.ศ. 2567", totalBudget: 400000, totalUsed: 350000 },
-        { year: 2025, thaiYear: 2568, label: "แผนงานและโครงการประจำปี พ.ศ. 2568", totalBudget: 450000, totalUsed: 200000 },
-        { year: 2026, thaiYear: 2569, label: "แผนงานและโครงการประจำปี พ.ศ. 2569", totalBudget: 480000, totalUsed: 0 }
-    ];
-
-    for (const plan of plans) {
-        const existing = await prisma.annualPlan.findUnique({ where: { year: plan.year } });
-        if (!existing) {
-            await prisma.annualPlan.create({ data: plan });
-            console.log(`✅ Created Plan: ${plan.thaiYear}`);
-        }
-    }
-
     console.log("DB Seed Sync Completed!");
 }
 
 main()
-  .then(async () => {
-    await prisma.$disconnect()
-  })
-  .catch(async (e) => {
-    console.error(e)
-    await prisma.$disconnect()
-    process.exit(1)
-  });
+    .then(async () => {
+        await prisma.$disconnect()
+    })
+    .catch(async (e) => {
+        console.error(e)
+        await prisma.$disconnect()
+        process.exit(1)
+    });
