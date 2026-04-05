@@ -150,6 +150,7 @@ model Transaction {
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
   note         String?
+  claimedBy    String?
   department   Department @relation(fields: [departmentId], references: [id])
   project      Project?   @relation(fields: [projectId], references: [id])
 

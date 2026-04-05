@@ -58,6 +58,7 @@ export const createTransaction = async (req: Request, res: Response) => {
                 amount: Number(amount),
                 title: title || "",
                 docRef: docRef || "",
+                claimedBy: req.body.claimedBy || "",
                 slipUrl,
                 thaiYear: thaiYearVal ? Number(thaiYearVal) : 2569
             },
@@ -176,8 +177,9 @@ export const updateTransaction = async (req: Request, res: Response) => {
                 ...(note !== undefined && { note: note || "" }),
                 ...(category && { category }),
                 ...(amount !== undefined && { amount: Number(amount) }),
-                ...(title && { title }),
+                title: title || undefined, // Support updating title too
                 ...(docRef !== undefined && { docRef: docRef || "" }),
+                ...(req.body.claimedBy !== undefined && { claimedBy: req.body.claimedBy || "" }),
                 slipUrl,
                 ...(thaiYear && { thaiYear: Number(thaiYear) })
             },
