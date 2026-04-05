@@ -16,20 +16,38 @@ const ROLE_LABELS: Record<string, string> = {
     VIEWER: 'ผู้ใช้ทั่วไป',
 };
 
-export const getUsers = async (req: Request, res: Response) => {
+export const getUsers = async (req: AuthRequest, res: Response) => {
     try {
+        const currentUser = req.user;
+        const isSuperAdmin = currentUser?.role === 'SUPER_ADMIN';
+
         const users = await prisma.user.findMany({
             include: { department: true },
             orderBy: { createdAt: 'desc' }
         });
         
-        // Map to exclude new fields
-        const usersWithFields = users.map(user => ({
-            ...user,
-            passwordHash: undefined // security
-        }));
+        // Map to exclude sensitive fields if not SUPER_ADMIN
+        const usersFiltered = users.map(user => {
+            if (isSuperAdmin) {
+                return {
+                    ...user,
+                    passwordHash: undefined // security
+                };
+            }
+            
+            // For others, only return non-sensitive fields
+            return {
+                id: user.id,
+                name: user.name,
+                username: user.username,
+                role: user.role,
+                department: user.department,
+                createdAt: user.createdAt
+                // phone, email, facebook etc are EXCLUDED
+            };
+        });
         
-        return res.json(usersWithFields);
+        return res.json(usersFiltered);
     } catch (error) {
         console.error("Error fetching users:", error);
         return res.status(500).json({ error: "Failed to fetch users" });

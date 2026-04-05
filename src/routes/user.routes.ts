@@ -15,8 +15,8 @@ router.get('/me', authenticateToken as any, getProfile);
 router.put('/me', authenticateToken as any, updateMe);
 router.put('/me/password', authenticateToken as any, changePassword);
 
-// Admin routes (SUPER_ADMIN only for user management)
-router.get('/', authenticateToken as any, authorizeSuperAdmin as any, getUsers);
+// Admin routes (GET for ADMIN/SUPER_ADMIN, others for SUPER_ADMIN only)
+router.get('/', authenticateToken as any, authorizeAdmin as any, getUsers);
 router.post('/', authenticateToken as any, authorizeSuperAdmin as any, createUser);
 router.post('/upload', authenticateToken as any, authorizeSuperAdmin as any, upload.single('file'), bulkUploadUsers);
 router.put('/:id', authenticateToken as any, authorizeSuperAdmin as any, updateUser);
