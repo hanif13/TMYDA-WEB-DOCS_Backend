@@ -28,14 +28,30 @@ const ROLE_LABELS = {
 };
 const getUsers = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
+        const currentUser = req.user;
+        const isSuperAdmin = (currentUser === null || currentUser === void 0 ? void 0 : currentUser.role) === 'SUPER_ADMIN';
         const users = yield prisma_1.prisma.user.findMany({
             include: { department: true },
             orderBy: { createdAt: 'desc' }
         });
-        // Map to exclude new fields
-        const usersWithFields = users.map(user => (Object.assign(Object.assign({}, user), { passwordHash: undefined // security
-         })));
-        return res.json(usersWithFields);
+        // Map to exclude sensitive fields if not SUPER_ADMIN
+        const usersFiltered = users.map(user => {
+            if (isSuperAdmin) {
+                return Object.assign(Object.assign({}, user), { passwordHash: undefined // security
+                 });
+            }
+            // For others, only return non-sensitive fields
+            return {
+                id: user.id,
+                name: user.name,
+                username: user.username,
+                role: user.role,
+                department: user.department,
+                createdAt: user.createdAt
+                // phone, email, facebook etc are EXCLUDED
+            };
+        });
+        return res.json(usersFiltered);
     }
     catch (error) {
         console.error("Error fetching users:", error);

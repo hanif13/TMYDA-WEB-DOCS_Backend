@@ -12,6 +12,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.createProjectBulk = exports.deleteAnnualPlan = exports.updateAnnualPlan = exports.deleteProject = exports.updateProject = exports.createAnnualPlan = exports.createProject = exports.getAnnualYears = exports.getAnnualPlans = void 0;
 const prisma_1 = require("../lib/prisma");
 const supabase_1 = require("../lib/supabase");
+const budget_sync_1 = require("../utils/budget.sync");
 const getAnnualPlans = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const plans = yield prisma_1.prisma.annualPlan.findMany({
@@ -135,6 +136,7 @@ const updateProject = (req, res) => __awaiter(void 0, void 0, void 0, function* 
         const actualPax = data.actualPax;
         const actualDate = data.actualDate;
         const actualBudget = data.actualBudget;
+        const actualBudgetExternal = data.actualBudgetExternal;
         const isUnplanned = data.isUnplanned;
         let months = data.months;
         if (typeof months === 'string') {
@@ -185,11 +187,14 @@ const updateProject = (req, res) => __awaiter(void 0, void 0, void 0, function* 
         }
         const updated = yield prisma_1.prisma.project.update({
             where: { id },
-            data: Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign({}, (name && { name })), (departmentId && { departmentId })), (subDepartment !== undefined && { subDepartment })), (projectType && { projectType })), (lead && { lead })), (budget !== undefined && { budget: Number(budget) })), (quarter !== undefined && { quarter: Number(quarter) })), (months !== undefined && { months })), (completedMonths !== undefined && { completedMonths })), (isStarted !== undefined && { isStarted: String(isStarted) === 'true' })), (status && { status })), (budgetUsed !== undefined && { budgetUsed: Number(budgetUsed) })), (description !== undefined && { description })), (kpi !== undefined && { kpi })), (targetPax !== undefined && { targetPax: Number(targetPax) })), (actualPax !== undefined && { actualPax: Number(actualPax) })), (actualDate !== undefined && { actualDate })), (actualBudget !== undefined && { actualBudget: Number(actualBudget) })), (isUnplanned !== undefined && { isUnplanned: String(isUnplanned) === 'true' })), (summaryImages && { summaryImages })),
+            data: Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign({}, (name && { name })), (departmentId && { departmentId })), (subDepartment !== undefined && { subDepartment })), (projectType && { projectType })), (lead && { lead })), (budget !== undefined && { budget: Number(budget) })), (quarter !== undefined && { quarter: Number(quarter) })), (months !== undefined && { months })), (completedMonths !== undefined && { completedMonths })), (isStarted !== undefined && { isStarted: String(isStarted) === 'true' })), (status && { status })), (budgetUsed !== undefined && { budgetUsed: Number(budgetUsed) })), (description !== undefined && { description })), (kpi !== undefined && { kpi })), (targetPax !== undefined && { targetPax: Number(targetPax) })), (actualPax !== undefined && { actualPax: Number(actualPax) })), (actualDate !== undefined && { actualDate })), (actualBudget !== undefined && { actualBudget: Number(actualBudget) })), (actualBudgetExternal !== undefined && { actualBudgetExternal: Number(actualBudgetExternal) })), (isUnplanned !== undefined && { isUnplanned: String(isUnplanned) === 'true' })), (summaryImages && { summaryImages })),
             include: {
                 department: true
             }
         });
+        if (updated.annualPlanId) {
+            yield (0, budget_sync_1.syncAnnualPlanTotalUsed)(updated.annualPlanId);
+        }
         return res.json(updated);
     }
     catch (error) {
@@ -215,10 +220,7 @@ const deleteProject = (req, res) => __awaiter(void 0, void 0, void 0, function* 
         yield prisma_1.prisma.project.delete({
             where: { id }
         });
-        yield prisma_1.prisma.annualPlan.update({
-            where: { id: project.annualPlanId },
-            data: { totalBudget: { decrement: project.budget } }
-        });
+        yield (0, budget_sync_1.syncAnnualPlanTotalUsed)(project.annualPlanId);
         return res.json({ message: "Project deleted successfully" });
     }
     catch (error) {

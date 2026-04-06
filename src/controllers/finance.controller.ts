@@ -59,6 +59,7 @@ export const createTransaction = async (req: Request, res: Response) => {
                 title: title || "",
                 docRef: docRef || "",
                 claimedBy: req.body.claimedBy || "",
+                recordedBy: req.body.recordedBy || "",
                 slipUrl,
                 thaiYear: thaiYearVal ? Number(thaiYearVal) : 2569
             },
@@ -142,7 +143,7 @@ export const getFinanceSummary = async (req: Request, res: Response) => {
 export const updateTransaction = async (req: Request, res: Response) => {
     try {
         const id = req.params.id as string;
-        const { date, type, departmentId, category, amount, title, thaiYear, docRef, projectId, months, note } = req.body;
+        const { date, type, departmentId, category, amount, title, thaiYear, docRef, projectId, months, note, recordedBy } = req.body;
         const file = req.file;
 
         const oldTx = await prisma.transaction.findUnique({ where: { id } });
@@ -180,6 +181,7 @@ export const updateTransaction = async (req: Request, res: Response) => {
                 title: title || undefined, // Support updating title too
                 ...(docRef !== undefined && { docRef: docRef || "" }),
                 ...(req.body.claimedBy !== undefined && { claimedBy: req.body.claimedBy || "" }),
+                ...(recordedBy !== undefined && { recordedBy: recordedBy || "" }),
                 slipUrl,
                 ...(thaiYear && { thaiYear: Number(thaiYear) })
             },

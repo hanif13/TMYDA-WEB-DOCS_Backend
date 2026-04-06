@@ -9,28 +9,10 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getFinanceSummary = exports.getFinanceCategories = exports.deleteTransaction = exports.createTransaction = exports.getTransactions = void 0;
+exports.updateTransaction = exports.getFinanceSummary = exports.getFinanceCategories = exports.deleteTransaction = exports.createTransaction = exports.getTransactions = void 0;
 const prisma_1 = require("../lib/prisma");
 const supabase_1 = require("../lib/supabase");
-// Helper: recalculate and sync project.budgetUsed from its transactions
-function syncProjectBudgetUsed(projectId) {
-    return __awaiter(this, void 0, void 0, function* () {
-        const projectTx = yield prisma_1.prisma.transaction.findMany({
-            where: { projectId },
-            select: { type: true, amount: true }
-        });
-        const expense = projectTx
-            .filter(t => t.type === 'expense')
-            .reduce((sum, t) => sum + t.amount, 0);
-        const refund = projectTx
-            .filter(t => t.type === 'refund')
-            .reduce((sum, t) => sum + t.amount, 0);
-        yield prisma_1.prisma.project.update({
-            where: { id: projectId },
-            data: { budgetUsed: expense - refund }
-        });
-    });
-}
+const budget_sync_1 = require("../utils/budget.sync");
 const getTransactions = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { year } = req.query;
@@ -84,6 +66,8 @@ const createTransaction = (req, res) => __awaiter(void 0, void 0, void 0, functi
                 amount: Number(amount),
                 title: title || "",
                 docRef: docRef || "",
+                claimedBy: req.body.claimedBy || "",
+                recordedBy: req.body.recordedBy || "",
                 slipUrl,
                 thaiYear: thaiYearVal ? Number(thaiYearVal) : 2569
             },
@@ -91,7 +75,7 @@ const createTransaction = (req, res) => __awaiter(void 0, void 0, void 0, functi
         });
         // Sync project budgetUsed if linked to a project
         if (transaction.projectId) {
-            yield syncProjectBudgetUsed(transaction.projectId);
+            yield (0, budget_sync_1.syncProjectBudgetUsed)(transaction.projectId);
         }
         return res.status(201).json(transaction);
     }
@@ -109,7 +93,7 @@ const deleteTransaction = (req, res) => __awaiter(void 0, void 0, void 0, functi
         yield prisma_1.prisma.transaction.delete({ where: { id } });
         // Sync project budgetUsed if it was linked to a project
         if (tx === null || tx === void 0 ? void 0 : tx.projectId) {
-            yield syncProjectBudgetUsed(tx.projectId);
+            yield (0, budget_sync_1.syncProjectBudgetUsed)(tx.projectId);
         }
         return res.status(204).send();
     }
@@ -160,3 +144,50 @@ const getFinanceSummary = (req, res) => __awaiter(void 0, void 0, void 0, functi
     }
 });
 exports.getFinanceSummary = getFinanceSummary;
+const updateTransaction = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const id = req.params.id;
+        const { date, type, departmentId, category, amount, title, thaiYear, docRef, projectId, months, note, recordedBy } = req.body;
+        const file = req.file;
+        const oldTx = yield prisma_1.prisma.transaction.findUnique({ where: { id } });
+        if (!oldTx)
+            return res.status(404).json({ error: "Transaction not found" });
+        let slipUrl = oldTx.slipUrl;
+        if (file) {
+            const extension = file.originalname.split('.').pop();
+            const fileName = `fin-${Date.now()}-${Math.round(Math.random() * 1e9)}.${extension}`;
+            const { data, error } = yield supabase_1.supabaseAdmin.storage
+                .from('uploads')
+                .upload(`finance/${fileName}`, file.buffer, {
+                contentType: file.mimetype,
+                upsert: true
+            });
+            if (error)
+                throw error;
+            const { data: { publicUrl } } = supabase_1.supabaseAdmin.storage
+                .from('uploads')
+                .getPublicUrl(`finance/${fileName}`);
+            slipUrl = publicUrl;
+        }
+        const transaction = yield prisma_1.prisma.transaction.update({
+            where: { id },
+            data: Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign({}, (date && { date: date })), (type && { type })), (departmentId && { departmentId })), (projectId !== undefined && { projectId: projectId || null })), (months && { months: typeof months === 'string' ? JSON.parse(months) : months })), (note !== undefined && { note: note || "" })), (category && { category })), (amount !== undefined && { amount: Number(amount) })), { title: title || undefined }), (docRef !== undefined && { docRef: docRef || "" })), (req.body.claimedBy !== undefined && { claimedBy: req.body.claimedBy || "" })), (recordedBy !== undefined && { recordedBy: recordedBy || "" })), { slipUrl }), (thaiYear && { thaiYear: Number(thaiYear) })),
+            include: { department: true, project: true }
+        });
+        // Sync project budgetUsed for old and new projects
+        const projectsToSync = new Set();
+        if (oldTx.projectId)
+            projectsToSync.add(oldTx.projectId);
+        if (transaction.projectId)
+            projectsToSync.add(transaction.projectId);
+        for (const pId of projectsToSync) {
+            yield (0, budget_sync_1.syncProjectBudgetUsed)(pId);
+        }
+        return res.json(transaction);
+    }
+    catch (error) {
+        console.error("Error updating transaction:", error);
+        return res.status(500).json({ error: "Failed to update transaction" });
+    }
+});
+exports.updateTransaction = updateTransaction;

@@ -4,7 +4,7 @@ const express_1 = require("express");
 const department_controller_1 = require("../controllers/department.controller");
 const auth_middleware_1 = require("../middleware/auth.middleware");
 const router = (0, express_1.Router)();
-router.get('/', department_controller_1.getDepartments);
+router.get('/', auth_middleware_1.authenticateToken, department_controller_1.getDepartments);
 router.post('/', auth_middleware_1.authenticateToken, department_controller_1.createDepartment);
 router.put('/reorder', auth_middleware_1.authenticateToken, department_controller_1.reorderDepartments);
 router.put('/:id', auth_middleware_1.authenticateToken, department_controller_1.updateDepartment);
