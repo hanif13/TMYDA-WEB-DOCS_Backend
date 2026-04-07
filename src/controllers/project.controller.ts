@@ -139,6 +139,11 @@ export const updateProject = async (req: Request, res: Response) => {
             try { completedMonths = JSON.parse(completedMonths); } catch (e) {}
         }
 
+        let bodySummaryImages = data.summaryImages;
+        if (typeof bodySummaryImages === 'string') {
+            try { bodySummaryImages = JSON.parse(bodySummaryImages); } catch (e) {}
+        }
+
         // If budget is changing, we need to update the AnnualPlan totalBudget
         if (budget !== undefined && budget !== null) {
             const oldProject = await prisma.project.findUnique({
@@ -198,7 +203,12 @@ export const updateProject = async (req: Request, res: Response) => {
                 ...(actualBudget !== undefined && { actualBudget: Number(actualBudget) }),
                 ...(actualBudgetExternal !== undefined && { actualBudgetExternal: Number(actualBudgetExternal) }),
                 ...(isUnplanned !== undefined && { isUnplanned: String(isUnplanned) === 'true' }),
-                ...(summaryImages && { summaryImages })
+                ...(bodySummaryImages && { summaryImages: bodySummaryImages }),
+                ...(summaryImages && { 
+                    summaryImages: {
+                        push: summaryImages
+                    }
+                })
             },
             include: {
                 department: true

@@ -45,7 +45,7 @@ const login = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
             username: user.username,
             role: user.role,
             permissions: user.permissions
-        }, secret, { expiresIn: '7d' });
+        }, secret, { expiresIn: '24h' });
         return res.json({
             token,
             user: {

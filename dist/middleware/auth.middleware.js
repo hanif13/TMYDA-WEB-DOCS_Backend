@@ -14,6 +14,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.authorizePermission = exports.authorizeSuperAdmin = exports.authorizeFinance = exports.authorizeAdmin = exports.authenticateToken = void 0;
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
+const prisma_1 = require("../lib/prisma");
 const authenticateToken = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
@@ -27,7 +28,20 @@ const authenticateToken = (req, res, next) => __awaiter(void 0, void 0, void 0, 
             return res.status(500).json({ error: 'เซิร์ฟเวอร์ยังไม่พร้อมใช้งาน' });
         }
         const decoded = jsonwebtoken_1.default.verify(token, secret);
-        req.user = decoded;
+        // 🚨 Security Fix: Verify that the user still exists in the database!
+        const userInDb = yield prisma_1.prisma.user.findUnique({
+            where: { id: decoded.userId }
+        });
+        if (!userInDb) {
+            return res.status(403).json({ error: 'บัญชีผู้ใช้นี้ถูกระงับหรือลบออกจากระบบแล้ว' });
+        }
+        // Sync fresh data from DB (in case admin changed their role mid-session)
+        req.user = {
+            userId: userInDb.id,
+            username: userInDb.username,
+            role: userInDb.role,
+            permissions: userInDb.permissions
+        };
         next();
     }
     catch (err) {

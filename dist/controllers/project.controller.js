@@ -152,6 +152,13 @@ const updateProject = (req, res) => __awaiter(void 0, void 0, void 0, function* 
             }
             catch (e) { }
         }
+        let bodySummaryImages = data.summaryImages;
+        if (typeof bodySummaryImages === 'string') {
+            try {
+                bodySummaryImages = JSON.parse(bodySummaryImages);
+            }
+            catch (e) { }
+        }
         // If budget is changing, we need to update the AnnualPlan totalBudget
         if (budget !== undefined && budget !== null) {
             const oldProject = yield prisma_1.prisma.project.findUnique({
@@ -187,7 +194,11 @@ const updateProject = (req, res) => __awaiter(void 0, void 0, void 0, function* 
         }
         const updated = yield prisma_1.prisma.project.update({
             where: { id },
-            data: Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign({}, (name && { name })), (departmentId && { departmentId })), (subDepartment !== undefined && { subDepartment })), (projectType && { projectType })), (lead && { lead })), (budget !== undefined && { budget: Number(budget) })), (quarter !== undefined && { quarter: Number(quarter) })), (months !== undefined && { months })), (completedMonths !== undefined && { completedMonths })), (isStarted !== undefined && { isStarted: String(isStarted) === 'true' })), (status && { status })), (budgetUsed !== undefined && { budgetUsed: Number(budgetUsed) })), (description !== undefined && { description })), (kpi !== undefined && { kpi })), (targetPax !== undefined && { targetPax: Number(targetPax) })), (actualPax !== undefined && { actualPax: Number(actualPax) })), (actualDate !== undefined && { actualDate })), (actualBudget !== undefined && { actualBudget: Number(actualBudget) })), (actualBudgetExternal !== undefined && { actualBudgetExternal: Number(actualBudgetExternal) })), (isUnplanned !== undefined && { isUnplanned: String(isUnplanned) === 'true' })), (summaryImages && { summaryImages })),
+            data: Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign({}, (name && { name })), (departmentId && { departmentId })), (subDepartment !== undefined && { subDepartment })), (projectType && { projectType })), (lead && { lead })), (budget !== undefined && { budget: Number(budget) })), (quarter !== undefined && { quarter: Number(quarter) })), (months !== undefined && { months })), (completedMonths !== undefined && { completedMonths })), (isStarted !== undefined && { isStarted: String(isStarted) === 'true' })), (status && { status })), (budgetUsed !== undefined && { budgetUsed: Number(budgetUsed) })), (description !== undefined && { description })), (kpi !== undefined && { kpi })), (targetPax !== undefined && { targetPax: Number(targetPax) })), (actualPax !== undefined && { actualPax: Number(actualPax) })), (actualDate !== undefined && { actualDate })), (actualBudget !== undefined && { actualBudget: Number(actualBudget) })), (actualBudgetExternal !== undefined && { actualBudgetExternal: Number(actualBudgetExternal) })), (isUnplanned !== undefined && { isUnplanned: String(isUnplanned) === 'true' })), (bodySummaryImages && { summaryImages: bodySummaryImages })), (summaryImages && {
+                summaryImages: {
+                    push: summaryImages
+                }
+            })),
             include: {
                 department: true
             }
