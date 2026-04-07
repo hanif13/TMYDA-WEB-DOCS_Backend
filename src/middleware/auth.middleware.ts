@@ -1,6 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 
+import { prisma } from '../lib/prisma';
+
 // Extend Express Request to include user
 export interface AuthRequest extends Request {
     user?: {
@@ -27,7 +29,24 @@ export const authenticateToken = async (req: AuthRequest, res: Response, next: N
         }
 
         const decoded = jwt.verify(token, secret) as any;
-        req.user = decoded;
+        
+        // 🚨 Security Fix: Verify that the user still exists in the database!
+        const userInDb = await prisma.user.findUnique({
+            where: { id: decoded.userId }
+        });
+
+        if (!userInDb) {
+            return res.status(403).json({ error: 'บัญชีผู้ใช้นี้ถูกระงับหรือลบออกจากระบบแล้ว' });
+        }
+
+        // Sync fresh data from DB (in case admin changed their role mid-session)
+        req.user = {
+            userId: userInDb.id,
+            username: userInDb.username,
+            role: userInDb.role,
+            permissions: userInDb.permissions
+        };
+        
         next();
     } catch (err) {
         console.error('JWT verification error:', err);

@@ -41,7 +41,7 @@ export const login = async (req: Request, res: Response) => {
                 permissions: user.permissions 
             },
             secret,
-            { expiresIn: '7d' }
+            { expiresIn: '24h' }
         );
 
         return res.json({
