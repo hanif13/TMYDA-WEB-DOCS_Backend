@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+// Updated schema: adding subDepartment support
 import { prisma } from '../lib/prisma';
 import bcrypt from 'bcryptjs';
 import { AuthRequest } from '../middleware/auth.middleware';
@@ -77,6 +78,7 @@ export const getProfile = async (req: AuthRequest, res: Response) => {
             departmentId: user.departmentId,
             email: user.email,
             phoneNumber: user.phoneNumber,
+            subDepartment: user.subDepartment,
             facebook: user.facebook,
             createdAt: user.createdAt,
         });
@@ -88,7 +90,7 @@ export const getProfile = async (req: AuthRequest, res: Response) => {
 
 export const createUser = async (req: Request, res: Response) => {
     try {
-        const { username, password, role, name, department, departmentId: bodyDeptId, email, phoneNumber, facebook } = req.body;
+        const { username, password, role, name, department, departmentId: bodyDeptId, email, phoneNumber, facebook, subDepartment } = req.body;
         const targetRole = role || 'VIEWER';
 
         // Validate role
@@ -125,6 +127,7 @@ export const createUser = async (req: Request, res: Response) => {
                 departmentId: finalDeptId || null,
                 email: email || null,
                 phoneNumber: phoneNumber || null,
+                subDepartment: subDepartment || null,
                 facebook: facebook || null,
                 permissions: targetRole === 'SUPER_ADMIN' ? ['all'] : ['VIEW']
             },
@@ -144,7 +147,7 @@ export const createUser = async (req: Request, res: Response) => {
 export const updateUser = async (req: Request, res: Response) => {
     try {
         const id = req.params.id as string;
-        const { username, password, role, name, department, departmentId: bodyDeptId, email, phoneNumber, facebook } = req.body;
+        const { username, password, role, name, department, departmentId: bodyDeptId, email, phoneNumber, facebook, subDepartment } = req.body;
         
         let updateData: any = {};
         if (username) updateData.username = username;
@@ -152,6 +155,7 @@ export const updateUser = async (req: Request, res: Response) => {
         if (email !== undefined) updateData.email = email;
         if (phoneNumber !== undefined) updateData.phoneNumber = phoneNumber;
         if (facebook !== undefined) updateData.facebook = facebook;
+        if (subDepartment !== undefined) updateData.subDepartment = subDepartment;
 
         if (role) {
             if (!VALID_ROLES.includes(role)) {
@@ -208,7 +212,7 @@ export const updateMe = async (req: AuthRequest, res: Response) => {
         const userId = req.user?.userId;
         if (!userId) return res.status(401).json({ error: 'Unauthorized' });
 
-        const { name, email, phoneNumber, facebook, departmentId } = req.body;
+        const { name, email, phoneNumber, facebook, departmentId, subDepartment } = req.body;
 
         const updateData: any = {};
         if (name) updateData.name = name;
@@ -216,6 +220,7 @@ export const updateMe = async (req: AuthRequest, res: Response) => {
         if (phoneNumber !== undefined) updateData.phoneNumber = phoneNumber;
         if (facebook !== undefined) updateData.facebook = facebook;
         if (departmentId !== undefined) updateData.departmentId = departmentId;
+        if (subDepartment !== undefined) updateData.subDepartment = subDepartment;
 
         const updatedUser = await prisma.user.update({
             where: { id: userId },
@@ -232,6 +237,7 @@ export const updateMe = async (req: AuthRequest, res: Response) => {
             departmentId: updatedUser.departmentId,
             email: updatedUser.email,
             phoneNumber: updatedUser.phoneNumber,
+            subDepartment: updatedUser.subDepartment,
             facebook: updatedUser.facebook
         });
     } catch (error) {
@@ -276,12 +282,30 @@ export const changePassword = async (req: AuthRequest, res: Response) => {
     }
 };
 
-export const deleteUser = async (req: Request, res: Response) => {
+export const deleteUser = async (req: AuthRequest, res: Response) => {
     try {
         const id = req.params.id as string;
+        const currentUserId = req.user?.userId;
+
+        // 1. Prevent deleting self
+        if (id === currentUserId) {
+            return res.status(400).json({ error: "ไม่สามารถลบตัวเองได้" });
+        }
+
+        const userToDelete = await prisma.user.findUnique({ where: { id } });
+        if (!userToDelete) return res.status(404).json({ error: "ไม่พบผู้ใช้" });
+
+        // 2. Prevent deleting last SUPER_ADMIN
+        if (userToDelete.role === 'SUPER_ADMIN') {
+            const adminCount = await prisma.user.count({ where: { role: 'SUPER_ADMIN' } });
+            if (adminCount <= 1) {
+                return res.status(400).json({ error: "ไม่สามารถลบผู้ดูแลระบบคนสุดท้ายได้" });
+            }
+        }
+
         await prisma.user.delete({ where: { id } });
         return res.status(204).send();
-    } catch (error) {
+    } catch (error: any) {
         console.error("Error deleting user:", error);
         return res.status(500).json({ error: "Failed to delete user" });
     }
@@ -352,6 +376,7 @@ export const bulkUploadUsers = async (req: Request, res: Response) => {
                 const password = record.password || record['รหัสผ่าน'] || '123456';
                 const name = record.name || record['ชื่อ'];
                 const deptName = record.department || record['หน่วยงาน'];
+                const subDeptName = record.subDepartment || record['สังกัด'];
                 const roleInput = record.role || record['ระดับสิทธิ์'] || 'ผู้ใช้ทั่วไป';
 
                 if (!username) {
@@ -384,6 +409,7 @@ export const bulkUploadUsers = async (req: Request, res: Response) => {
                             passwordHash,
                             role: targetRole,
                             departmentId: deptId || existingUser.departmentId,
+                            subDepartment: subDeptName || existingUser.subDepartment,
                             permissions
                         }
                     });
@@ -407,6 +433,7 @@ export const bulkUploadUsers = async (req: Request, res: Response) => {
                             name: name || username,
                             role: targetRole,
                             departmentId: deptId,
+                            subDepartment: subDeptName || null,
                             permissions
                         }
                     });

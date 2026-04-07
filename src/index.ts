@@ -12,6 +12,8 @@ import projectRoutes from './routes/project.routes';
 import financeRoutes from './routes/finance.routes';
 import committeeRoutes from './routes/committee.routes';
 import departmentRoutes from './routes/department.routes';
+import uploadRoutes from './routes/upload.routes';
+import path from 'path';
 
 // Load environment variables
 dotenv.config();
@@ -42,8 +44,12 @@ app.use('/api/documents', documentRoutes);
 app.use('/api/document-requests', documentRequestRoutes);
 app.use('/api/projects', projectRoutes);
 app.use('/api/finance', financeRoutes);
-app.use('/api/committee', committeeRoutes);
 app.use('/api/departments', departmentRoutes);
+app.use('/api/committee', committeeRoutes);
+app.use('/api/upload', uploadRoutes);
+
+// Serve static files from uploads folder
+app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
 // Global Error Handler
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {

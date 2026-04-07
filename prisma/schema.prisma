@@ -8,20 +8,22 @@ datasource db {
 }
 
 model User {
-  id           String      @id @default(uuid())
-  username     String      @unique
-  passwordHash String
-  name         String
-  role         String      @default("VIEWER")
-  permissions  String[]    @default(["VIEW"])
-  departmentId String?
-  email        String?
-  phoneNumber  String?
-  facebook     String?
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
-  documents    Document[]  @relation("DocumentUploader")
-  department   Department? @relation(fields: [departmentId], references: [id])
+  id            String      @id @default(uuid())
+  username      String      @unique
+  passwordHash  String
+  name          String
+  role          String      @default("VIEWER")
+  permissions   String[]    @default(["VIEW"])
+  departmentId  String?
+  subDepartment String?
+  email         String?
+  phoneNumber   String?
+  facebook      String?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  documents     Document[]  @relation("DocumentUploader")
+  department    Department? @relation(fields: [departmentId], references: [id])
+  documentRequests DocumentRequest[] @relation("UserRequests")
 }
 
 model Department {
@@ -60,7 +62,7 @@ model Document {
   filePath     String
   departmentId String?
   categoryId   String
-  uploadedById String
+  uploadedById String?
   projectId    String?
   thaiYear     Int              @default(2569)
   createdAt    DateTime         @default(now())
@@ -68,7 +70,8 @@ model Document {
   category     DocumentCategory @relation(fields: [categoryId], references: [id])
   department   Department?      @relation(fields: [departmentId], references: [id])
   project      Project?         @relation(fields: [projectId], references: [id])
-  uploadedBy   User             @relation("DocumentUploader", fields: [uploadedById], references: [id])
+  uploadedBy   User?            @relation("DocumentUploader", fields: [uploadedById], references: [id], onDelete: SetNull)
+  requests     DocumentRequest[]
 
   @@index([thaiYear])
 }
@@ -78,9 +81,13 @@ model DocumentRequest {
   requestType String
   department  String
   requestedBy String
+  requestedById String?
+  user        User?    @relation("UserRequests", fields: [requestedById], references: [id])
   status      String   @default("รอดำเนินการ")
   fields      Json
   pdfPath     String?
+  resultDocId String?
+  resultDoc   Document? @relation(fields: [resultDocId], references: [id])
   thaiYear    Int      @default(2567)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt

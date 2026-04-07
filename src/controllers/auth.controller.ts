@@ -52,7 +52,8 @@ export const login = async (req: Request, res: Response) => {
                 name: user.name,
                 role: user.role,
                 permissions: user.permissions,
-                department: user.department?.name
+                department: user.department?.name,
+                subDepartment: user.subDepartment
             }
         });
     } catch (error) {

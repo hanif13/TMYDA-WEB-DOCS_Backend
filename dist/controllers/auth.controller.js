@@ -54,7 +54,8 @@ const login = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
                 name: user.name,
                 role: user.role,
                 permissions: user.permissions,
-                department: (_a = user.department) === null || _a === void 0 ? void 0 : _a.name
+                department: (_a = user.department) === null || _a === void 0 ? void 0 : _a.name,
+                subDepartment: user.subDepartment
             }
         });
     }

@@ -14,12 +14,18 @@ const prisma_1 = require("../lib/prisma");
 const getDocumentRequests = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { year } = req.query;
+        const user = req.user;
         const where = {};
         if (year && !isNaN(parseInt(year))) {
             where.thaiYear = parseInt(year);
         }
+        // Privacy Fix: If not Admin/SuperAdmin, only show own requests
+        if (user && user.role !== 'ADMIN' && user.role !== 'SUPER_ADMIN') {
+            where.requestedById = user.userId;
+        }
         const requests = yield prisma_1.prisma.documentRequest.findMany({
             where,
+            include: { resultDoc: true },
             orderBy: { createdAt: 'desc' }
         });
         return res.json(requests);
@@ -36,10 +42,11 @@ exports.getDocumentRequests = getDocumentRequests;
 const createDocumentRequest = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { requestType, department, requestedBy, fields, thaiYear } = req.body;
+        const user = req.user;
         const newRequest = yield prisma_1.prisma.documentRequest.create({
             data: Object.assign({ requestType,
                 department,
-                requestedBy, fields: fields || {} }, (thaiYear && { thaiYear: parseInt(thaiYear) }))
+                requestedBy, requestedById: user === null || user === void 0 ? void 0 : user.userId, fields: fields || {} }, (thaiYear && { thaiYear: parseInt(thaiYear) }))
         });
         return res.status(201).json(newRequest);
     }
@@ -52,16 +59,19 @@ exports.createDocumentRequest = createDocumentRequest;
 const updateDocumentRequest = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const id = req.params.id;
-        const { requestType, department, requestedBy, fields, status } = req.body;
+        const { requestType, department, requestedBy, fields, status, resultDocId } = req.body;
         const updatedRequest = yield prisma_1.prisma.documentRequest.update({
             where: { id: id },
-            data: Object.assign(Object.assign(Object.assign(Object.assign(Object.assign({}, (requestType && { requestType })), (department && { department })), (requestedBy && { requestedBy })), (fields && { fields })), (status && { status }))
+            data: Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign({}, (requestType && { requestType })), (department && { department })), (requestedBy && { requestedBy })), (fields && { fields })), (status && { status })), (resultDocId !== undefined && { resultDocId }))
         });
         return res.json(updatedRequest);
     }
     catch (error) {
         console.error("Error updating document request:", error);
-        return res.status(500).json({ error: "Failed to update document request" });
+        return res.status(500).json({
+            error: "Failed to update document request",
+            details: error instanceof Error ? error.message : String(error)
+        });
     }
 });
 exports.updateDocumentRequest = updateDocumentRequest;

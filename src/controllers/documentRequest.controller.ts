@@ -1,16 +1,25 @@
-import { Request, Response } from 'express';
+import { Response } from 'express';
 import { prisma } from '../lib/prisma';
+import { AuthRequest } from '../middleware/auth.middleware';
 
-export const getDocumentRequests = async (req: Request, res: Response) => {
+export const getDocumentRequests = async (req: AuthRequest, res: Response) => {
     try {
         const { year } = req.query;
+        const user = req.user;
         const where: any = {};
+        
         if (year && !isNaN(parseInt(year as string))) {
             where.thaiYear = parseInt(year as string);
         }
 
+        // Privacy Fix: If not Admin/SuperAdmin, only show own requests
+        if (user && user.role !== 'ADMIN' && user.role !== 'SUPER_ADMIN') {
+            where.requestedById = user.userId;
+        }
+
         const requests = await prisma.documentRequest.findMany({
             where,
+            include: { resultDoc: true },
             orderBy: { createdAt: 'desc' }
         });
         
@@ -24,15 +33,17 @@ export const getDocumentRequests = async (req: Request, res: Response) => {
     }
 };
 
-export const createDocumentRequest = async (req: Request, res: Response) => {
+export const createDocumentRequest = async (req: AuthRequest, res: Response) => {
     try {
         const { requestType, department, requestedBy, fields, thaiYear } = req.body;
+        const user = req.user;
         
         const newRequest = await prisma.documentRequest.create({
             data: {
                 requestType,
                 department,
-                requestedBy,
+                requestedBy, // The display name
+                requestedById: user?.userId, // The unique identifier
                 fields: fields || {},
                 ...(thaiYear && { thaiYear: parseInt(thaiYear as string) })
             }
@@ -45,10 +56,10 @@ export const createDocumentRequest = async (req: Request, res: Response) => {
     }
 };
 
-export const updateDocumentRequest = async (req: Request, res: Response) => {
+export const updateDocumentRequest = async (req: AuthRequest, res: Response) => {
     try {
         const id = req.params.id as string;
-        const { requestType, department, requestedBy, fields, status } = req.body;
+        const { requestType, department, requestedBy, fields, status, resultDocId } = req.body;
         
         const updatedRequest = await prisma.documentRequest.update({
             where: { id: id as string },
@@ -57,18 +68,22 @@ export const updateDocumentRequest = async (req: Request, res: Response) => {
                 ...(department && { department }),
                 ...(requestedBy && { requestedBy }),
                 ...(fields && { fields }),
-                ...(status && { status })
+                ...(status && { status }),
+                ...(resultDocId !== undefined && { resultDocId })
             }
         });
         
         return res.json(updatedRequest);
     } catch (error) {
         console.error("Error updating document request:", error);
-        return res.status(500).json({ error: "Failed to update document request" });
+        return res.status(500).json({ 
+            error: "Failed to update document request",
+            details: error instanceof Error ? error.message : String(error)
+        });
     }
 };
 
-export const deleteDocumentRequest = async (req: Request, res: Response) => {
+export const deleteDocumentRequest = async (req: AuthRequest, res: Response) => {
     try {
         const id = req.params.id as string;
         await prisma.documentRequest.delete({

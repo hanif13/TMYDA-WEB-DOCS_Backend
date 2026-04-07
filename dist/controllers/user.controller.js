@@ -13,6 +13,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.bulkUploadUsers = exports.updatePermissions = exports.deleteUser = exports.changePassword = exports.updateMe = exports.updateUser = exports.createUser = exports.getProfile = exports.getUsers = void 0;
+// Updated schema: adding subDepartment support
 const prisma_1 = require("../lib/prisma");
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const sync_1 = require("csv-parse/sync");
@@ -82,6 +83,7 @@ const getProfile = (req, res) => __awaiter(void 0, void 0, void 0, function* () 
             departmentId: user.departmentId,
             email: user.email,
             phoneNumber: user.phoneNumber,
+            subDepartment: user.subDepartment,
             facebook: user.facebook,
             createdAt: user.createdAt,
         });
@@ -94,7 +96,7 @@ const getProfile = (req, res) => __awaiter(void 0, void 0, void 0, function* () 
 exports.getProfile = getProfile;
 const createUser = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const { username, password, role, name, department, departmentId: bodyDeptId, email, phoneNumber, facebook } = req.body;
+        const { username, password, role, name, department, departmentId: bodyDeptId, email, phoneNumber, facebook, subDepartment } = req.body;
         const targetRole = role || 'VIEWER';
         // Validate role
         if (!VALID_ROLES.includes(targetRole)) {
@@ -127,6 +129,7 @@ const createUser = (req, res) => __awaiter(void 0, void 0, void 0, function* () 
                 departmentId: finalDeptId || null,
                 email: email || null,
                 phoneNumber: phoneNumber || null,
+                subDepartment: subDepartment || null,
                 facebook: facebook || null,
                 permissions: targetRole === 'SUPER_ADMIN' ? ['all'] : ['VIEW']
             },
@@ -146,7 +149,7 @@ exports.createUser = createUser;
 const updateUser = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const id = req.params.id;
-        const { username, password, role, name, department, departmentId: bodyDeptId, email, phoneNumber, facebook } = req.body;
+        const { username, password, role, name, department, departmentId: bodyDeptId, email, phoneNumber, facebook, subDepartment } = req.body;
         let updateData = {};
         if (username)
             updateData.username = username;
@@ -158,6 +161,8 @@ const updateUser = (req, res) => __awaiter(void 0, void 0, void 0, function* () 
             updateData.phoneNumber = phoneNumber;
         if (facebook !== undefined)
             updateData.facebook = facebook;
+        if (subDepartment !== undefined)
+            updateData.subDepartment = subDepartment;
         if (role) {
             if (!VALID_ROLES.includes(role)) {
                 return res.status(400).json({ error: `Role ไม่ถูกต้อง` });
@@ -211,7 +216,7 @@ const updateMe = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
         const userId = (_a = req.user) === null || _a === void 0 ? void 0 : _a.userId;
         if (!userId)
             return res.status(401).json({ error: 'Unauthorized' });
-        const { name, email, phoneNumber, facebook, departmentId } = req.body;
+        const { name, email, phoneNumber, facebook, departmentId, subDepartment } = req.body;
         const updateData = {};
         if (name)
             updateData.name = name;
@@ -223,6 +228,8 @@ const updateMe = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
             updateData.facebook = facebook;
         if (departmentId !== undefined)
             updateData.departmentId = departmentId;
+        if (subDepartment !== undefined)
+            updateData.subDepartment = subDepartment;
         const updatedUser = yield prisma_1.prisma.user.update({
             where: { id: userId },
             data: updateData,
@@ -237,6 +244,7 @@ const updateMe = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
             departmentId: updatedUser.departmentId,
             email: updatedUser.email,
             phoneNumber: updatedUser.phoneNumber,
+            subDepartment: updatedUser.subDepartment,
             facebook: updatedUser.facebook
         });
     }
@@ -280,8 +288,24 @@ const changePassword = (req, res) => __awaiter(void 0, void 0, void 0, function*
 });
 exports.changePassword = changePassword;
 const deleteUser = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a;
     try {
         const id = req.params.id;
+        const currentUserId = (_a = req.user) === null || _a === void 0 ? void 0 : _a.userId;
+        // 1. Prevent deleting self
+        if (id === currentUserId) {
+            return res.status(400).json({ error: "ไม่สามารถลบตัวเองได้" });
+        }
+        const userToDelete = yield prisma_1.prisma.user.findUnique({ where: { id } });
+        if (!userToDelete)
+            return res.status(404).json({ error: "ไม่พบผู้ใช้" });
+        // 2. Prevent deleting last SUPER_ADMIN
+        if (userToDelete.role === 'SUPER_ADMIN') {
+            const adminCount = yield prisma_1.prisma.user.count({ where: { role: 'SUPER_ADMIN' } });
+            if (adminCount <= 1) {
+                return res.status(400).json({ error: "ไม่สามารถลบผู้ดูแลระบบคนสุดท้ายได้" });
+            }
+        }
         yield prisma_1.prisma.user.delete({ where: { id } });
         return res.status(204).send();
     }
@@ -349,6 +373,7 @@ const bulkUploadUsers = (req, res) => __awaiter(void 0, void 0, void 0, function
                 const password = record.password || record['รหัสผ่าน'] || '123456';
                 const name = record.name || record['ชื่อ'];
                 const deptName = record.department || record['หน่วยงาน'];
+                const subDeptName = record.subDepartment || record['สังกัด'];
                 const roleInput = record.role || record['ระดับสิทธิ์'] || 'ผู้ใช้ทั่วไป';
                 if (!username) {
                     results.failed++;
@@ -376,6 +401,7 @@ const bulkUploadUsers = (req, res) => __awaiter(void 0, void 0, void 0, function
                             passwordHash,
                             role: targetRole,
                             departmentId: deptId || existingUser.departmentId,
+                            subDepartment: subDeptName || existingUser.subDepartment,
                             permissions
                         }
                     });
@@ -399,6 +425,7 @@ const bulkUploadUsers = (req, res) => __awaiter(void 0, void 0, void 0, function
                             name: name || username,
                             role: targetRole,
                             departmentId: deptId,
+                            subDepartment: subDeptName || null,
                             permissions
                         }
                     });

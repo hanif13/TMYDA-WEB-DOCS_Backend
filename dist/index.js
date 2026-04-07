@@ -16,6 +16,8 @@ const project_routes_1 = __importDefault(require("./routes/project.routes"));
 const finance_routes_1 = __importDefault(require("./routes/finance.routes"));
 const committee_routes_1 = __importDefault(require("./routes/committee.routes"));
 const department_routes_1 = __importDefault(require("./routes/department.routes"));
+const upload_routes_1 = __importDefault(require("./routes/upload.routes"));
+const path_1 = __importDefault(require("path"));
 // Load environment variables
 dotenv_1.default.config();
 const app = (0, express_1.default)();
@@ -41,8 +43,11 @@ app.use('/api/documents', document_routes_1.default);
 app.use('/api/document-requests', documentRequest_routes_1.default);
 app.use('/api/projects', project_routes_1.default);
 app.use('/api/finance', finance_routes_1.default);
-app.use('/api/committee', committee_routes_1.default);
 app.use('/api/departments', department_routes_1.default);
+app.use('/api/committee', committee_routes_1.default);
+app.use('/api/upload', upload_routes_1.default);
+// Serve static files from uploads folder
+app.use('/uploads', express_1.default.static(path_1.default.join(process.cwd(), 'uploads')));
 // Global Error Handler
 app.use((err, req, res, next) => {
     console.error(`🔥 Uncaught Exception: ${err.message}`);
