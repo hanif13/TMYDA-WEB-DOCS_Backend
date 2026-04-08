@@ -11,6 +11,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.deleteDocumentRequest = exports.updateDocumentRequest = exports.createDocumentRequest = exports.getDocumentRequests = void 0;
 const prisma_1 = require("../lib/prisma");
+// Removed unused doc-utils as createDocument logic handles numbering
 const getDocumentRequests = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { year } = req.query;

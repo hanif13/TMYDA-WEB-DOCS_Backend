@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { AuthRequest } from '../middleware/auth.middleware';
+// Removed unused doc-utils as createDocument logic handles numbering
 
 export const getDocumentRequests = async (req: AuthRequest, res: Response) => {
     try {

@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { supabaseAdmin } from '../lib/supabase';
+import { generateNextDocNo } from '../lib/doc-utils';
 
 const isUUID = (str: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
 
@@ -29,7 +30,7 @@ export const getDocuments = async (req: Request, res: Response) => {
 export const createDocument = async (req: Request, res: Response) => {
     try {
         console.log("Create Document Request Body:", req.body);
-        const { docNo, name, departmentId, categoryId, uploadedById, thaiYear, year: yearBody } = req.body;
+        const { name, departmentId, categoryId, uploadedById, thaiYear, year: yearBody } = req.body; // docNo is ignored
         const file = req.file;
         console.log("File received:", file ? { name: file.originalname, size: file.size } : "No file");
 
@@ -108,23 +109,57 @@ export const createDocument = async (req: Request, res: Response) => {
         }
         
         const thaiYearVal = thaiYear || yearBody;
+        const finalYear = thaiYearVal ? Number(thaiYearVal) : 2569;
 
-        const newDoc = await prisma.document.create({
-            data: {
-                docNo,
-                name,
-                departmentId: realDeptId,
-                categoryId: realCatId,
-                uploadedById: realUploaderId,
-                filePath,
-                thaiYear: thaiYearVal ? Number(thaiYearVal) : 2569
-            },
-            include: {
-                category: true,
-                department: true,
-                uploadedBy: true
+        // Transaction to ensure atomic docNo generation and insertion
+        // Prisma transaction with retry logic for unique constraint
+        let newDoc;
+        let retries = 3;
+        
+        while (retries > 0) {
+            try {
+                newDoc = await prisma.$transaction(async (tx) => {
+                    // Get the actual names for generating the document number
+                    const deptObj = await tx.department.findUnique({ where: { id: realDeptId } });
+                    const catObj = await tx.documentCategory.findUnique({ where: { id: realCatId } });
+                    
+                    if (!deptObj || !catObj) {
+                        throw new Error("Invalid department or category for docNo generation");
+                    }
+                    
+                    // Generate safe docNo inside the transaction
+                    const generatedDocNo = await generateNextDocNo(deptObj.name, catObj.name, finalYear, tx);
+                    
+                    return await tx.document.create({
+                        data: {
+                            docNo: generatedDocNo,
+                            name,
+                            departmentId: realDeptId,
+                            categoryId: realCatId,
+                            uploadedById: realUploaderId,
+                            filePath,
+                            thaiYear: finalYear
+                        },
+                        include: {
+                            category: true,
+                            department: true,
+                            uploadedBy: true
+                        }
+                    });
+                });
+                break; // Success, exit retry loop
+            } catch (txError: any) {
+                // If it's a unique constraint violation (P2002), retry
+                if (txError.code === 'P2002' && retries > 1) {
+                    console.warn(`Unique constraint caught generating docNo. Retrying... (${retries - 1} left)`);
+                    retries--;
+                    // Optional small delay
+                    await new Promise(r => setTimeout(r, Math.random() * 200 + 100));
+                } else {
+                    throw txError; // Other errors or out of retries, bubble up
+                }
             }
-        });
+        }
         
         return res.status(201).json(newDoc);
     } catch (error: any) {

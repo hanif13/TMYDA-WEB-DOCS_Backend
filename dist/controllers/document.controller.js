@@ -12,6 +12,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.getDocumentCategories = exports.deleteDocument = exports.updateDocument = exports.linkDocumentToProject = exports.createDocument = exports.getDocuments = void 0;
 const prisma_1 = require("../lib/prisma");
 const supabase_1 = require("../lib/supabase");
+const doc_utils_1 = require("../lib/doc-utils");
 const isUUID = (str) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
 const getDocuments = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
@@ -39,7 +40,7 @@ exports.getDocuments = getDocuments;
 const createDocument = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         console.log("Create Document Request Body:", req.body);
-        const { docNo, name, departmentId, categoryId, uploadedById, thaiYear, year: yearBody } = req.body;
+        const { name, departmentId, categoryId, uploadedById, thaiYear, year: yearBody } = req.body; // docNo is ignored
         const file = req.file;
         console.log("File received:", file ? { name: file.originalname, size: file.size } : "No file");
         // Find real IDs if names were passed instead of UUIDs
@@ -113,22 +114,54 @@ const createDocument = (req, res) => __awaiter(void 0, void 0, void 0, function*
             filePath = publicUrl;
         }
         const thaiYearVal = thaiYear || yearBody;
-        const newDoc = yield prisma_1.prisma.document.create({
-            data: {
-                docNo,
-                name,
-                departmentId: realDeptId,
-                categoryId: realCatId,
-                uploadedById: realUploaderId,
-                filePath,
-                thaiYear: thaiYearVal ? Number(thaiYearVal) : 2569
-            },
-            include: {
-                category: true,
-                department: true,
-                uploadedBy: true
+        const finalYear = thaiYearVal ? Number(thaiYearVal) : 2569;
+        // Transaction to ensure atomic docNo generation and insertion
+        // Prisma transaction with retry logic for unique constraint
+        let newDoc;
+        let retries = 3;
+        while (retries > 0) {
+            try {
+                newDoc = yield prisma_1.prisma.$transaction((tx) => __awaiter(void 0, void 0, void 0, function* () {
+                    // Get the actual names for generating the document number
+                    const deptObj = yield tx.department.findUnique({ where: { id: realDeptId } });
+                    const catObj = yield tx.documentCategory.findUnique({ where: { id: realCatId } });
+                    if (!deptObj || !catObj) {
+                        throw new Error("Invalid department or category for docNo generation");
+                    }
+                    // Generate safe docNo inside the transaction
+                    const generatedDocNo = yield (0, doc_utils_1.generateNextDocNo)(deptObj.name, catObj.name, finalYear, tx);
+                    return yield tx.document.create({
+                        data: {
+                            docNo: generatedDocNo,
+                            name,
+                            departmentId: realDeptId,
+                            categoryId: realCatId,
+                            uploadedById: realUploaderId,
+                            filePath,
+                            thaiYear: finalYear
+                        },
+                        include: {
+                            category: true,
+                            department: true,
+                            uploadedBy: true
+                        }
+                    });
+                }));
+                break; // Success, exit retry loop
             }
-        });
+            catch (txError) {
+                // If it's a unique constraint violation (P2002), retry
+                if (txError.code === 'P2002' && retries > 1) {
+                    console.warn(`Unique constraint caught generating docNo. Retrying... (${retries - 1} left)`);
+                    retries--;
+                    // Optional small delay
+                    yield new Promise(r => setTimeout(r, Math.random() * 200 + 100));
+                }
+                else {
+                    throw txError; // Other errors or out of retries, bubble up
+                }
+            }
+        }
         return res.status(201).json(newDoc);
     }
     catch (error) {
