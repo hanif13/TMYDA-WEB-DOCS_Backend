@@ -1,26 +1,13 @@
 import { Router } from 'express';
 import multer from 'multer';
 import path from 'path';
-import fs from 'fs';
+import { supabaseAdmin } from '../lib/supabase';
 import { authenticateToken } from '../middleware/auth.middleware';
 
 const router = Router();
 
-// Configure storage
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        const uploadDir = path.join(process.cwd(), 'uploads');
-        if (!fs.existsSync(uploadDir)) {
-            fs.mkdirSync(uploadDir, { recursive: true });
-        }
-        cb(null, uploadDir);
-    },
-    filename: (req, file, cb) => {
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-        const ext = path.extname(file.originalname);
-        cb(null, 'img-' + uniqueSuffix + ext);
-    }
-});
+// Configure memory storage since Vercel is read-only
+const storage = multer.memoryStorage();
 
 const upload = multer({ 
     storage,
@@ -38,20 +25,40 @@ const upload = multer({
 });
 
 // @route   POST /api/upload
-// @desc    Upload multiple images
+// @desc    Upload multiple images via Supabase
 // @access  Authenticated
-router.post('/', authenticateToken as any, upload.array('files', 15), (req: any, res: any) => {
+router.post('/', authenticateToken as any, upload.array('files', 15), async (req: any, res: any) => {
     try {
         const files = req.files as Express.Multer.File[];
         if (!files || files.length === 0) {
             return res.status(400).json({ error: 'ไม่พบไฟล์ที่อัปโหลด' });
         }
 
-        // Generate URLs
-        // Note: In production, you'd use a real domain. For local, we use relative or absolute from backend.
-        const urls = files.map(file => {
-            return `/uploads/${file.filename}`;
-        });
+        const urls: string[] = [];
+
+        for (const file of files) {
+            const ext = path.extname(file.originalname);
+            const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+            const fileName = `img-${uniqueSuffix}${ext}`;
+            
+            const { data, error } = await supabaseAdmin.storage
+                .from('uploads')
+                .upload(`images/${fileName}`, file.buffer, {
+                    contentType: file.mimetype,
+                    upsert: true
+                });
+
+            if (error) {
+                console.error("Supabase upload error for file", file.originalname, error);
+                throw error;
+            }
+
+            const { data: { publicUrl } } = supabaseAdmin.storage
+                .from('uploads')
+                .getPublicUrl(`images/${fileName}`);
+                
+            urls.push(publicUrl);
+        }
 
         res.json({ urls });
     } catch (error: any) {
