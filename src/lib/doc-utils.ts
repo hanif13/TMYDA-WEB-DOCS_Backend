@@ -60,41 +60,53 @@ export async function generateNextDocNo(
     // Explicit type to satisfy TS
     type DocItem = { docNo: string | null; department: { name: string } | null; category: { name: string } | null; };
 
+    // Regex to extract sequence number from different formats
+    const parseSeq = (docNo: string | null, pattern: RegExp): number | null => {
+        if (!docNo) return null;
+        const match = docNo.match(pattern);
+        return match ? parseInt(match[1], 10) : null;
+    };
+
     if (cat === "ประเภทเอกสารโครงการ") {
+        // Global sequence for all project documents
+        const pattern = new RegExp(`^โครงการที่\\s*(\\d+)\\s*/\\s*${year}$`);
         used = existingDocs
-            .filter((d: DocItem) => d.docNo?.startsWith("โครงการที่ ") && d.docNo?.endsWith(`/${year}`))
-            .map((d: DocItem) => parseInt(d.docNo!.replace("โครงการที่ ", "").split("/")[0], 10))
-            .filter((n: number) => !isNaN(n));
+            .map((d: DocItem) => parseSeq(d.docNo, pattern))
+            .filter((n: number | null): n is number => n !== null);
     } else if (cat === "ประเภทเอกสารรายงานผลการดำเนินโครงการ") {
+        // Global sequence for all project reports
+        const pattern = new RegExp(`^รายงานโครงการที่\\s*(\\d+)\\s*/\\s*${year}$`);
         used = existingDocs
-            .filter((d: DocItem) => d.docNo?.startsWith("รายงานโครงการที่ ") && d.docNo?.endsWith(`/${year}`))
-            .map((d: DocItem) => parseInt(d.docNo!.replace("รายงานโครงการที่ ", "").split("/")[0], 10))
-            .filter((n: number) => !isNaN(n));
+            .map((d: DocItem) => parseSeq(d.docNo, pattern))
+            .filter((n: number | null): n is number => n !== null);
     } else if (cat === "ประเภทเอกสารประกาศหรือคำสั่ง") {
+        // Per-department sequence for announcements
         const isSharedDept = ["สมาคมพัฒนาเยาวชนมุสลิมไทย", "สำนักกิจการสตรี สมาคมฯ"].includes(deptName);
+        const pattern = new RegExp(`^ประกาศหรือคำสั่งที่\\s*(\\d+)\\s*/\\s*${year}$`);
         
         used = existingDocs
             .filter((d: DocItem) => {
                 const docDeptName = d.department?.name || "";
-                const matchDept = isSharedDept 
+                return isSharedDept 
                     ? ["สมาคมพัฒนาเยาวชนมุสลิมไทย", "สำนักกิจการสตรี สมาคมฯ"].includes(docDeptName)
                     : docDeptName === deptName;
-                return matchDept && d.docNo?.startsWith("ประกาศหรือคำสั่งที่ ") && d.docNo?.endsWith(`/${year}`);
             })
-            .map((d: DocItem) => parseInt(d.docNo!.replace("ประกาศหรือคำสั่งที่ ", "").split("/")[0], 10))
-            .filter((n: number) => !isNaN(n));
+            .map((d: DocItem) => parseSeq(d.docNo, pattern))
+            .filter((n: number | null): n is number => n !== null);
     } else {
+        // Per-department sequence for Internal/External documents (determined by prefix)
         const prefix = ORG_PREFIX_BY_DEPT[deptName] || "ที่ ฟฮ";
+        const escapedPrefix = prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const pattern = new RegExp(`^${escapedPrefix}\\s+(\\d+)\\s*/\\s*${year}$`);
+        
         used = existingDocs
             .filter((d: DocItem) => {
-                const docCat = d.category?.name || "";
-                const mappedDocCat = CATEGORY_MAP[docCat] || docCat;
-                return d.docNo?.startsWith(`${prefix} `) && 
-                       d.docNo?.endsWith(`/${year}`) &&
-                       mappedDocCat === cat;
+                const docDeptName = d.department?.name || "";
+                // Even though prefix makes it unique, we explicitly check dept to count the right sequence
+                return docDeptName === deptName;
             })
-            .map((d: DocItem) => parseInt(d.docNo!.replace(`${prefix} `, "").split("/")[0], 10))
-            .filter((n: number) => !isNaN(n));
+            .map((d: DocItem) => parseSeq(d.docNo, pattern))
+            .filter((n: number | null): n is number => n !== null);
     }
 
     const nextSeq = used.length > 0 ? Math.max(...used) + 1 : 1;

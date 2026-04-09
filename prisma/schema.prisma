@@ -8,22 +8,22 @@ datasource db {
 }
 
 model User {
-  id            String      @id @default(uuid())
-  username      String      @unique
-  passwordHash  String
-  name          String
-  role          String      @default("VIEWER")
-  permissions   String[]    @default(["VIEW"])
-  departmentId  String?
-  subDepartment String?
-  email         String?
-  phoneNumber   String?
-  facebook      String?
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
-  documents     Document[]  @relation("DocumentUploader")
-  department    Department? @relation(fields: [departmentId], references: [id])
+  id               String            @id @default(uuid())
+  username         String            @unique
+  passwordHash     String
+  name             String
+  role             String            @default("VIEWER")
+  permissions      String[]          @default(["VIEW"])
+  departmentId     String?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  email            String?
+  facebook         String?
+  phoneNumber      String?
+  subDepartment    String?
+  documents        Document[]        @relation("DocumentUploader")
   documentRequests DocumentRequest[] @relation("UserRequests")
+  department       Department?       @relation(fields: [departmentId], references: [id])
 }
 
 model Department {
@@ -56,7 +56,7 @@ model DocumentCategory {
 }
 
 model Document {
-  id           String           @id @default(uuid())
+  id           String            @id @default(uuid())
   docNo        String
   name         String
   filePath     String
@@ -64,34 +64,34 @@ model Document {
   categoryId   String
   uploadedById String?
   projectId    String?
-  thaiYear     Int              @default(2569)
-  createdAt    DateTime         @default(now())
-  updatedAt    DateTime         @updatedAt
-  category     DocumentCategory @relation(fields: [categoryId], references: [id])
-  department   Department?      @relation(fields: [departmentId], references: [id])
-  project      Project?         @relation(fields: [projectId], references: [id])
-  uploadedBy   User?            @relation("DocumentUploader", fields: [uploadedById], references: [id], onDelete: SetNull)
+  thaiYear     Int               @default(2569)
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  category     DocumentCategory  @relation(fields: [categoryId], references: [id])
+  department   Department?       @relation(fields: [departmentId], references: [id])
+  project      Project?          @relation(fields: [projectId], references: [id])
+  uploadedBy   User?             @relation("DocumentUploader", fields: [uploadedById], references: [id])
   requests     DocumentRequest[]
 
+  @@unique([docNo, thaiYear, categoryId, departmentId])
   @@index([thaiYear])
-  @@unique([docNo, thaiYear, categoryId])
 }
 
 model DocumentRequest {
-  id          String   @id @default(uuid())
-  requestType String
-  department  String
-  requestedBy String
+  id            String    @id @default(uuid())
+  requestType   String
+  department    String
+  requestedBy   String
+  status        String    @default("รอดำเนินการ")
+  fields        Json
+  pdfPath       String?
+  thaiYear      Int       @default(2567)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  resultDocId   String?
   requestedById String?
-  user        User?    @relation("UserRequests", fields: [requestedById], references: [id])
-  status      String   @default("รอดำเนินการ")
-  fields      Json
-  pdfPath     String?
-  resultDocId String?
-  resultDoc   Document? @relation(fields: [resultDocId], references: [id])
-  thaiYear    Int      @default(2567)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  user          User?     @relation("UserRequests", fields: [requestedById], references: [id])
+  resultDoc     Document? @relation(fields: [resultDocId], references: [id])
 
   @@index([thaiYear])
 }
@@ -109,37 +109,37 @@ model AnnualPlan {
 }
 
 model Project {
-  id              String        @id @default(uuid())
-  name            String
-  departmentId    String
-  subDepartment   String?
-  projectType     String
-  lead            String
-  budget          Float         @default(0)
-  budgetUsed      Float         @default(0)
-  quarter         Int
-  status          String        @default("planned")
-  startDate       String?
-  endDate         String?
-  description     String?
-  kpi             String?
-  targetPax       Int?
-  actualPax       Int?
-  months          Int[]         @default([])
-  completedMonths Int[]         @default([])
-  summaryImages   String[]      @default([])
-  isStarted       Boolean       @default(false)
-  isUnplanned     Boolean       @default(false)
-  annualPlanId    String
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
-  actualBudget    Float?
-  actualBudgetExternal Float @default(0)
-  actualDate      String?
-  documents       Document[]
-  annualPlan      AnnualPlan    @relation(fields: [annualPlanId], references: [id])
-  department      Department    @relation(fields: [departmentId], references: [id])
-  transactions    Transaction[]
+  id                   String        @id @default(uuid())
+  name                 String
+  departmentId         String
+  subDepartment        String?
+  projectType          String
+  lead                 String
+  budget               Float         @default(0)
+  budgetUsed           Float         @default(0)
+  quarter              Int
+  status               String        @default("planned")
+  startDate            String?
+  endDate              String?
+  description          String?
+  kpi                  String?
+  targetPax            Int?
+  actualPax            Int?
+  months               Int[]         @default([])
+  completedMonths      Int[]         @default([])
+  summaryImages        String[]      @default([])
+  isStarted            Boolean       @default(false)
+  isUnplanned          Boolean       @default(false)
+  annualPlanId         String
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+  actualBudget         Float?
+  actualDate           String?
+  actualBudgetExternal Float         @default(0)
+  documents            Document[]
+  annualPlan           AnnualPlan    @relation(fields: [annualPlanId], references: [id])
+  department           Department    @relation(fields: [departmentId], references: [id])
+  transactions         Transaction[]
 }
 
 model Transaction {

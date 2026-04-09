@@ -45,8 +45,14 @@ export const createDocument = async (req: Request, res: Response) => {
             if (isUUID(departmentId)) {
                 dept = await prisma.department.findUnique({ where: { id: departmentId } });
             } else {
+                // Check if it's a known string ID (like 'family', 'admin') or a Name
                 dept = await prisma.department.findFirst({ 
-                    where: { name: departmentId === "ส่วนกลาง" ? "สำนักอำนวยการ" : departmentId },
+                    where: {
+                        OR: [
+                            { id: departmentId },
+                            { name: departmentId === "ส่วนกลาง" ? "สำนักอำนวยการ" : departmentId }
+                        ]
+                    },
                     orderBy: { thaiYear: 'desc' }
                 });
             }
@@ -78,9 +84,35 @@ export const createDocument = async (req: Request, res: Response) => {
             }
         }
 
-        if (categoryId && !isUUID(categoryId)) {
-            const cat = await prisma.documentCategory.findUnique({ where: { name: categoryId } });
-            if (cat) realCatId = cat.id;
+        const thaiYearVal = thaiYear || yearBody;
+        const finalYear = thaiYearVal ? Number(thaiYearVal) : 2569;
+
+        if (categoryId) {
+            let cat;
+            if (isUUID(categoryId)) {
+                cat = await prisma.documentCategory.findUnique({ where: { id: categoryId } });
+            } else {
+                cat = await prisma.documentCategory.findUnique({ where: { name: categoryId } });
+            }
+            
+            if (cat) {
+                realCatId = cat.id;
+                
+                // If the user hasn't provided a specific department (or provided "ส่วนกลาง")
+                // AND it's a global category, default to admin
+                const isExplicitDept = departmentId && departmentId !== "ส่วนกลาง" && departmentId !== "admin";
+                
+                if (!isExplicitDept && 
+                    (cat.name === "ประเภทเอกสารโครงการ" || cat.name === "ประเภทเอกสารรายงานผลการดำเนินโครงการ")) {
+                    const globalDept = await prisma.department.findFirst({ 
+                        where: { name: "สำนักอำนวยการ", thaiYear: finalYear } 
+                    });
+                    if (globalDept) {
+                        realDeptId = globalDept.id;
+                        console.log(`Auto-resolved Global Type category: ${cat.name} to department: ${globalDept.name}`);
+                    }
+                }
+            }
         }
 
         if (uploadedById === "user_id_placeholder") {
@@ -108,8 +140,7 @@ export const createDocument = async (req: Request, res: Response) => {
             filePath = publicUrl;
         }
         
-        const thaiYearVal = thaiYear || yearBody;
-        const finalYear = thaiYearVal ? Number(thaiYearVal) : 2569;
+        
 
         // Transaction to ensure atomic docNo generation and insertion
         // Prisma transaction with retry logic for unique constraint
@@ -201,29 +232,65 @@ export const updateDocument = async (req: Request, res: Response) => {
         if (name) updateData.name = name;
         
         if (departmentId) {
-            if (!isUUID(departmentId)) {
-                const dept = await prisma.department.findFirst({ 
-                    where: { name: departmentId === "ส่วนกลาง" ? "สำนักอำนวยการ" : departmentId },
+            let dept;
+            if (isUUID(departmentId)) {
+                dept = await prisma.department.findUnique({ where: { id: departmentId } });
+            } else {
+                const deptName = departmentId === "ส่วนกลาง" ? "สำนักอำนวยการ" : departmentId;
+                dept = await prisma.department.findFirst({ 
+                    where: {
+                        OR: [
+                            { id: departmentId },
+                            { name: deptName }
+                        ]
+                    },
                     orderBy: { thaiYear: 'desc' }
                 });
-                if (dept) updateData.departmentId = dept.id;
-            } else {
-                updateData.departmentId = departmentId;
+            }
+
+            if (dept) {
+                // If the document has a specific year, ensure we use the department record for THAT year
+                // Default to a sensible current year if not loaded yet
+                const docToUpdate = await prisma.document.findUnique({ where: { id } });
+                const docYear = docToUpdate?.thaiYear || 2569;
+
+                if (dept.name && dept.thaiYear !== docYear) {
+                    let yearDept = await prisma.department.findFirst({
+                        where: { name: dept.name, thaiYear: docYear }
+                    });
+
+                    if (!yearDept) {
+                        yearDept = await prisma.department.create({
+                            data: {
+                                name: dept.name,
+                                subDepts: dept.subDepts || [],
+                                theme: dept.theme || null,
+                                thaiYear: docYear,
+                                order: dept.order || 0
+                            }
+                        });
+                    }
+                    updateData.departmentId = yearDept.id;
+                } else {
+                    updateData.departmentId = dept.id;
+                }
             }
         }
 
         if (categoryId) {
-            if (!isUUID(categoryId)) {
+            if (isUUID(categoryId)) {
+                updateData.categoryId = categoryId;
+            } else {
                 const cat = await prisma.documentCategory.findUnique({ where: { name: categoryId } });
                 if (cat) updateData.categoryId = cat.id;
-            } else {
-                updateData.categoryId = categoryId;
             }
         }
 
         if (uploadedById && uploadedById !== "user_id_placeholder") {
             updateData.uploadedById = uploadedById;
         }
+
+        console.log("Update Data Prepared:", updateData);
         
         if (file) {
             const extension = file.originalname.split('.').pop() || 'tmp';
@@ -241,16 +308,69 @@ export const updateDocument = async (req: Request, res: Response) => {
                 .getPublicUrl(`documents/${fileName}`);
             updateData.filePath = publicUrl;
         }
+
+        let updatedDoc;
         
-        const updatedDoc = await prisma.document.update({
-            where: { id },
-            data: updateData,
-            include: {
-                category: true,
-                department: true,
-                uploadedBy: true
+        // If docNo is "(ออกเลขอัตโนมัติ)", we need to generate it inside a transaction
+        if (docNo === "(ออกเลขอัตโนมัติ)") {
+            let retries = 3;
+            while (retries > 0) {
+                try {
+                    updatedDoc = await prisma.$transaction(async (tx) => {
+                        // Get current document state to know year and category/dept if not provided in request
+                        const currentDoc = await tx.document.findUnique({
+                            where: { id },
+                            include: { category: true, department: true }
+                        });
+
+                        if (!currentDoc) throw new Error("Document not found");
+
+                        // Determine final IDs and Names for sequence generation
+                        const targetDeptId = updateData.departmentId || currentDoc.departmentId;
+                        const targetCatId = updateData.categoryId || currentDoc.categoryId;
+                        const targetYear = currentDoc.thaiYear;
+
+                        const deptObj = await tx.department.findUnique({ where: { id: targetDeptId } });
+                        const catObj = await tx.documentCategory.findUnique({ where: { id: targetCatId } });
+
+                        if (!deptObj || !catObj) {
+                            throw new Error("Invalid department or category for docNo generation");
+                        }
+
+                        const generatedDocNo = await generateNextDocNo(deptObj.name, catObj.name, targetYear, tx);
+                        updateData.docNo = generatedDocNo;
+
+                        return await tx.document.update({
+                            where: { id },
+                            data: updateData,
+                            include: {
+                                category: true,
+                                department: true,
+                                uploadedBy: true
+                            }
+                        });
+                    });
+                    break; // Success
+                } catch (txError: any) {
+                    if (txError.code === 'P2002' && retries > 1) {
+                        retries--;
+                        console.log(`Unique constraint caught in update (docNo). Retrying... (${retries} left)`);
+                    } else {
+                        throw txError;
+                    }
+                }
             }
-        });
+        } else {
+            updatedDoc = await prisma.document.update({
+                where: { id },
+                data: updateData,
+                include: {
+                    category: true,
+                    department: true,
+                    uploadedBy: true
+                }
+            });
+        }
         
         return res.json(updatedDoc);
     } catch (error) {

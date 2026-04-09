@@ -58,45 +58,56 @@ function generateNextDocNo(deptName_1, categoryName_1) {
             }
         });
         let used = [];
+        // Regex to extract sequence number from different formats
+        const parseSeq = (docNo, pattern) => {
+            if (!docNo)
+                return null;
+            const match = docNo.match(pattern);
+            return match ? parseInt(match[1], 10) : null;
+        };
         if (cat === "ประเภทเอกสารโครงการ") {
+            // Global sequence for all project documents
+            const pattern = new RegExp(`^โครงการที่\\s*(\\d+)\\s*/\\s*${year}$`);
             used = existingDocs
-                .filter((d) => { var _a, _b; return ((_a = d.docNo) === null || _a === void 0 ? void 0 : _a.startsWith("โครงการที่ ")) && ((_b = d.docNo) === null || _b === void 0 ? void 0 : _b.endsWith(`/${year}`)); })
-                .map((d) => parseInt(d.docNo.replace("โครงการที่ ", "").split("/")[0], 10))
-                .filter((n) => !isNaN(n));
+                .map((d) => parseSeq(d.docNo, pattern))
+                .filter((n) => n !== null);
         }
         else if (cat === "ประเภทเอกสารรายงานผลการดำเนินโครงการ") {
+            // Global sequence for all project reports
+            const pattern = new RegExp(`^รายงานโครงการที่\\s*(\\d+)\\s*/\\s*${year}$`);
             used = existingDocs
-                .filter((d) => { var _a, _b; return ((_a = d.docNo) === null || _a === void 0 ? void 0 : _a.startsWith("รายงานโครงการที่ ")) && ((_b = d.docNo) === null || _b === void 0 ? void 0 : _b.endsWith(`/${year}`)); })
-                .map((d) => parseInt(d.docNo.replace("รายงานโครงการที่ ", "").split("/")[0], 10))
-                .filter((n) => !isNaN(n));
+                .map((d) => parseSeq(d.docNo, pattern))
+                .filter((n) => n !== null);
         }
         else if (cat === "ประเภทเอกสารประกาศหรือคำสั่ง") {
+            // Per-department sequence for announcements
             const isSharedDept = ["สมาคมพัฒนาเยาวชนมุสลิมไทย", "สำนักกิจการสตรี สมาคมฯ"].includes(deptName);
+            const pattern = new RegExp(`^ประกาศหรือคำสั่งที่\\s*(\\d+)\\s*/\\s*${year}$`);
             used = existingDocs
                 .filter((d) => {
-                var _a, _b, _c;
+                var _a;
                 const docDeptName = ((_a = d.department) === null || _a === void 0 ? void 0 : _a.name) || "";
-                const matchDept = isSharedDept
+                return isSharedDept
                     ? ["สมาคมพัฒนาเยาวชนมุสลิมไทย", "สำนักกิจการสตรี สมาคมฯ"].includes(docDeptName)
                     : docDeptName === deptName;
-                return matchDept && ((_b = d.docNo) === null || _b === void 0 ? void 0 : _b.startsWith("ประกาศหรือคำสั่งที่ ")) && ((_c = d.docNo) === null || _c === void 0 ? void 0 : _c.endsWith(`/${year}`));
             })
-                .map((d) => parseInt(d.docNo.replace("ประกาศหรือคำสั่งที่ ", "").split("/")[0], 10))
-                .filter((n) => !isNaN(n));
+                .map((d) => parseSeq(d.docNo, pattern))
+                .filter((n) => n !== null);
         }
         else {
+            // Per-department sequence for Internal/External documents (determined by prefix)
             const prefix = exports.ORG_PREFIX_BY_DEPT[deptName] || "ที่ ฟฮ";
+            const escapedPrefix = prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const pattern = new RegExp(`^${escapedPrefix}\\s+(\\d+)\\s*/\\s*${year}$`);
             used = existingDocs
                 .filter((d) => {
-                var _a, _b, _c;
-                const docCat = ((_a = d.category) === null || _a === void 0 ? void 0 : _a.name) || "";
-                const mappedDocCat = exports.CATEGORY_MAP[docCat] || docCat;
-                return ((_b = d.docNo) === null || _b === void 0 ? void 0 : _b.startsWith(`${prefix} `)) &&
-                    ((_c = d.docNo) === null || _c === void 0 ? void 0 : _c.endsWith(`/${year}`)) &&
-                    mappedDocCat === cat;
+                var _a;
+                const docDeptName = ((_a = d.department) === null || _a === void 0 ? void 0 : _a.name) || "";
+                // Even though prefix makes it unique, we explicitly check dept to count the right sequence
+                return docDeptName === deptName;
             })
-                .map((d) => parseInt(d.docNo.replace(`${prefix} `, "").split("/")[0], 10))
-                .filter((n) => !isNaN(n));
+                .map((d) => parseSeq(d.docNo, pattern))
+                .filter((n) => n !== null);
         }
         const nextSeq = used.length > 0 ? Math.max(...used) + 1 : 1;
         return formatDocNo(deptName, categoryName, nextSeq, year);

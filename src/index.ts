@@ -1,7 +1,10 @@
+import dotenv from 'dotenv';
+// Load environment variables immediately
+dotenv.config();
+
 import express from 'express';
 import cors from 'cors';
 import morgan from 'morgan';
-import dotenv from 'dotenv';
 
 // Routes imports
 import authRoutes from './routes/auth.routes';
@@ -15,8 +18,7 @@ import departmentRoutes from './routes/department.routes';
 import uploadRoutes from './routes/upload.routes';
 import path from 'path';
 
-// Load environment variables
-dotenv.config();
+
 
 const app = express();
 const PORT = process.env.PORT || 4000;
