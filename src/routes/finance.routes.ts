@@ -11,8 +11,8 @@ router.get('/categories', authenticateToken as any, getFinanceCategories);
 router.get('/summary', authenticateToken as any, getFinanceSummary);
 
 // Write routes — SUPER_ADMIN and FINANCE only
-router.post('/', authenticateToken as any, authorizeFinance as any, upload.single('evidence'), createTransaction);
-router.patch('/:id', authenticateToken as any, authorizeFinance as any, upload.single('evidence'), updateTransaction);
+router.post('/', authenticateToken as any, authorizeFinance as any, upload.single('file'), createTransaction);
+router.patch('/:id', authenticateToken as any, authorizeFinance as any, upload.single('file'), updateTransaction);
 router.delete('/:id', authenticateToken as any, authorizeFinance as any, deleteTransaction);
 
 export default router;
