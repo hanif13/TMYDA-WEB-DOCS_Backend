@@ -68,56 +68,59 @@ export async function generateNextDocNo(
         return match ? parseInt(match[1], 10) : null;
     };
 
-    if (cat === "ประเภทเอกสารโครงการ") {
-        // Global sequence for all project documents
-        const pattern = new RegExp(`^โครงการที่\\s*(\\d+)\\s*/\\s*${year}$`);
-        used = existingDocs
-            .map((d: DocItem) => parseSeq(d.docNo, pattern))
-            .filter((n: number | null): n is number => n !== null);
-    } else if (cat === "ประเภทเอกสารรายงานผลการดำเนินโครงการ") {
-        // Global sequence for all project reports
-        const pattern = new RegExp(`^รายงานโครงการที่\\s*(\\d+)\\s*/\\s*${year}$`);
-        used = existingDocs
-            .map((d: DocItem) => parseSeq(d.docNo, pattern))
-            .filter((n: number | null): n is number => n !== null);
-    } else if (cat === "ประเภทเอกสารประกาศหรือคำสั่ง") {
-        // Per-department sequence for announcements
-        const isSharedDept = ["สมาคมพัฒนาเยาวชนมุสลิมไทย", "สำนักกิจการสตรี สมาคมฯ"].includes(deptName);
-        const pattern = new RegExp(`^ประกาศหรือคำสั่งที่\\s*(\\d+)\\s*/\\s*${year}$`);
-        
-        used = existingDocs
-            .filter((d: DocItem) => {
-                const docDeptName = d.department?.name || "";
-                return isSharedDept 
-                    ? ["สมาคมพัฒนาเยาวชนมุสลิมไทย", "สำนักกิจการสตรี สมาคมฯ"].includes(docDeptName)
-                    : docDeptName === deptName;
-            })
-            .map((d: DocItem) => parseSeq(d.docNo, pattern))
-            .filter((n: number | null): n is number => n !== null);
-    } else {
-        // Per-department sequence for Internal/External documents (determined by prefix)
+    const patternPrefixMap: Record<string, RegExp> = {
+        "ประเภทเอกสารโครงการ": new RegExp(`^โครงการที่\\s*(\\d+)\\s*/\\s*${year}$`),
+        "ประเภทเอกสารรายงานผลการดำเนินโครงการ": new RegExp(`^รายงานโครงการที่\\s*(\\d+)\\s*/\\s*${year}$`),
+        "ประเภทเอกสารประกาศหรือคำสั่ง": new RegExp(`^ประกาศหรือคำสั่งที่\\s*(\\d+)\\s*/\\s*${year}$`)
+    };
+
+    const pattern = patternPrefixMap[cat] || (() => {
         const prefix = ORG_PREFIX_BY_DEPT[deptName] || "ที่ ฟฮ";
         const escapedPrefix = prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const pattern = new RegExp(`^${escapedPrefix}\\s+(\\d+)\\s*/\\s*${year}$`);
-        
-        used = existingDocs
-            .filter((d: DocItem) => {
-                const docDeptName = d.department?.name || "";
-                const docCatName = d.category?.name || "";
-                const docMappedCat = CATEGORY_MAP[docCatName] || docCatName;
+        return new RegExp(`^${escapedPrefix}\\s*(\\s|\\.|\\-)?\\s*(\\d+)\\s*/\\s*${year}$`);
+    })();
+    
+    used = existingDocs
+        .filter((d: DocItem) => {
+            const docDeptName = d.department?.name || "";
+            const docCatName = d.category?.name || "";
+            const docMappedCat = CATEGORY_MAP[docCatName] || docCatName;
 
-                // Case: Separate sequence for Internal and External documents
-                if (cat === "ประเภทเอกสารภายใน" || cat === "ประเภทเอกสารภายนอก") {
-                    return docDeptName === deptName && docMappedCat === cat;
+            // Strict department match
+            const isDeptMatch = docDeptName === deptName;
+
+            if (cat === "ประเภทเอกสารโครงการ" || cat === "ประเภทเอกสารรายงานผลการดำเนินโครงการ") {
+                // Global sequences
+                return docMappedCat === cat;
+            }
+
+            if (cat === "ประเภทเอกสารประกาศหรือคำสั่ง") {
+                const isSharedDept = ["สมาคมพัฒนาเยาวชนมุสลิมไทย", "สำนักกิจการสตรี สมาคมฯ"].includes(deptName);
+                if (isSharedDept) {
+                    return ["สมาคมพัฒนาเยาวชนมุสลิมไทย", "สำนักกิจการสตรี สมาคมฯ"].includes(docDeptName) && docMappedCat === cat;
                 }
+                return isDeptMatch && docMappedCat === cat;
+            }
 
-                // Case: Other miscellaneous documents count together but exclude Internal/External to avoid interference
-                return docDeptName === deptName && (docMappedCat !== "ประเภทเอกสารภายใน" && docMappedCat !== "ประเภทเอกสารภายนอก");
-            })
-            .map((d: DocItem) => parseSeq(d.docNo, pattern))
-            .filter((n: number | null): n is number => n !== null);
-    }
+            if (cat === "ประเภทเอกสารภายใน" || cat === "ประเภทเอกสารภายนอก") {
+                return isDeptMatch && docMappedCat === cat;
+            }
+
+            // Other miscellaneous (count together but exclude known separate categories)
+            return isDeptMatch && !["ประเภทเอกสารภายใน", "ประเภทเอกสารภายนอก", "ประเภทเอกสารประกาศหรือคำสั่ง"].includes(docMappedCat);
+        })
+        .map((d: DocItem) => {
+            const matchedPattern = patternPrefixMap[CATEGORY_MAP[d.category?.name || ""] || d.category?.name || ""] || pattern;
+            return parseSeq(d.docNo, matchedPattern);
+        })
+        .filter((n: number | null): n is number => n !== null);
 
     const nextSeq = used.length > 0 ? Math.max(...used) + 1 : 1;
-    return formatDocNo(deptName, categoryName, nextSeq, year);
+    const finalDocNo = formatDocNo(deptName, categoryName, nextSeq, year);
+    
+    console.log(`[Numbering Debug] Dept: ${deptName}, Cat: ${cat}, Year: ${year}`);
+    console.log(`[Numbering Debug] Found ${used.length} existing sequences in this category. Next sequence: ${nextSeq}`);
+    console.log(`[Numbering Debug] Result: ${finalDocNo}`);
+    
+    return finalDocNo;
 }

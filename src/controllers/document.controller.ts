@@ -312,7 +312,10 @@ export const updateDocument = async (req: Request, res: Response) => {
         let updatedDoc;
         
         // If docNo is "(ออกเลขอัตโนมัติ)", we need to generate it inside a transaction
-        if (docNo === "(ออกเลขอัตโนมัติ)") {
+        // Normalized check to handle potential whitespace variations
+        const isAutoNo = docNo && typeof docNo === 'string' && docNo.trim() === "(ออกเลขอัตโนมัติ)";
+        
+        if (isAutoNo) {
             let retries = 3;
             while (retries > 0) {
                 try {
