@@ -13,6 +13,7 @@ async function main() {
             OR: [
                 { docNo: "(ออกเลขอัตโนมัติ)" },
                 { docNo: { contains: "ออกเลข" } },
+                { docNo: { contains: "NaN" } },
                 { docNo: "" }
             ]
         },

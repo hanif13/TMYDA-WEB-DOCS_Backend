@@ -10,7 +10,7 @@ export const ORG_PREFIX_BY_DEPT: Record<string, string> = {
     "สมาคมพัฒนาเยาวชนมุสลิมไทย": "ที่ สพยท.",
     "สำนักกิจการสตรี สมาคมฯ": "ที่ สพยท.",
     "สำนักกิจการสตรี": "ที่ สพยท.",
-    "กรรมการที่ปรึกษา(ชูรอ)": "ที่ ชร.ฟฮ",
+    "กรรมการที่ปรึกษา (ชูรอ)": "ที่ ชร.ฟฮ",
 };
 
 export const CATEGORY_MAP: Record<string, string> = {
@@ -68,6 +68,9 @@ export async function generateNextDocNo(
         return match ? parseInt(match[1], 10) : null;
     };
 
+    const prefix = ORG_PREFIX_BY_DEPT[deptName] || "ที่ ฟฮ";
+    const sharedDepts = Object.keys(ORG_PREFIX_BY_DEPT).filter(k => ORG_PREFIX_BY_DEPT[k] === prefix);
+
     const patternPrefixMap: Record<string, RegExp> = {
         "ประเภทเอกสารโครงการ": new RegExp(`^โครงการที่\\s*(\\d+)\\s*/\\s*${year}$`),
         "ประเภทเอกสารรายงานผลการดำเนินโครงการ": new RegExp(`^รายงานโครงการที่\\s*(\\d+)\\s*/\\s*${year}$`),
@@ -75,9 +78,8 @@ export async function generateNextDocNo(
     };
 
     const pattern = patternPrefixMap[cat] || (() => {
-        const prefix = ORG_PREFIX_BY_DEPT[deptName] || "ที่ ฟฮ";
         const escapedPrefix = prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        return new RegExp(`^${escapedPrefix}\\s*(\\s|\\.|\\-)?\\s*(\\d+)\\s*/\\s*${year}$`);
+        return new RegExp(`^${escapedPrefix}\\s*(?:\\s|\\.|\\-)?\\s*(\\d+)\\s*/\\s*${year}$`);
     })();
     
     used = existingDocs
@@ -86,28 +88,20 @@ export async function generateNextDocNo(
             const docCatName = d.category?.name || "";
             const docMappedCat = CATEGORY_MAP[docCatName] || docCatName;
 
-            // Strict department match
-            const isDeptMatch = docDeptName === deptName;
-
             if (cat === "ประเภทเอกสารโครงการ" || cat === "ประเภทเอกสารรายงานผลการดำเนินโครงการ") {
                 // Global sequences
                 return docMappedCat === cat;
             }
 
+            // For all other categories, group by prefix (shared among departments using same prefix)
+            const isSharedPrefixDept = sharedDepts.includes(docDeptName);
+
             if (cat === "ประเภทเอกสารประกาศหรือคำสั่ง") {
-                const isSharedDept = ["สมาคมพัฒนาเยาวชนมุสลิมไทย", "สำนักกิจการสตรี สมาคมฯ"].includes(deptName);
-                if (isSharedDept) {
-                    return ["สมาคมพัฒนาเยาวชนมุสลิมไทย", "สำนักกิจการสตรี สมาคมฯ"].includes(docDeptName) && docMappedCat === cat;
-                }
-                return isDeptMatch && docMappedCat === cat;
+                return isSharedPrefixDept && docMappedCat === cat;
             }
 
-            if (cat === "ประเภทเอกสารภายใน" || cat === "ประเภทเอกสารภายนอก") {
-                return isDeptMatch && docMappedCat === cat;
-            }
-
-            // Other miscellaneous (count together but exclude known separate categories)
-            return isDeptMatch && !["ประเภทเอกสารภายใน", "ประเภทเอกสารภายนอก", "ประเภทเอกสารประกาศหรือคำสั่ง"].includes(docMappedCat);
+            // For all other categories, strictly separate by category
+            return isSharedPrefixDept && docMappedCat === cat;
         })
         .map((d: DocItem) => {
             const matchedPattern = patternPrefixMap[CATEGORY_MAP[d.category?.name || ""] || d.category?.name || ""] || pattern;
