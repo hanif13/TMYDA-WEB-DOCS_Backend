@@ -103,8 +103,16 @@ export async function generateNextDocNo(
         used = existingDocs
             .filter((d: DocItem) => {
                 const docDeptName = d.department?.name || "";
-                // Even though prefix makes it unique, we explicitly check dept to count the right sequence
-                return docDeptName === deptName;
+                const docCatName = d.category?.name || "";
+                const docMappedCat = CATEGORY_MAP[docCatName] || docCatName;
+
+                // Case: Separate sequence for Internal and External documents
+                if (cat === "ประเภทเอกสารภายใน" || cat === "ประเภทเอกสารภายนอก") {
+                    return docDeptName === deptName && docMappedCat === cat;
+                }
+
+                // Case: Other miscellaneous documents count together but exclude Internal/External to avoid interference
+                return docDeptName === deptName && (docMappedCat !== "ประเภทเอกสารภายใน" && docMappedCat !== "ประเภทเอกสารภายนอก");
             })
             .map((d: DocItem) => parseSeq(d.docNo, pattern))
             .filter((n: number | null): n is number => n !== null);

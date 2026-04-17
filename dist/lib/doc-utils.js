@@ -102,10 +102,16 @@ function generateNextDocNo(deptName_1, categoryName_1) {
             const pattern = new RegExp(`^${escapedPrefix}\\s+(\\d+)\\s*/\\s*${year}$`);
             used = existingDocs
                 .filter((d) => {
-                var _a;
+                var _a, _b;
                 const docDeptName = ((_a = d.department) === null || _a === void 0 ? void 0 : _a.name) || "";
-                // Even though prefix makes it unique, we explicitly check dept to count the right sequence
-                return docDeptName === deptName;
+                const docCatName = ((_b = d.category) === null || _b === void 0 ? void 0 : _b.name) || "";
+                const docMappedCat = exports.CATEGORY_MAP[docCatName] || docCatName;
+                // Case: Separate sequence for Internal and External documents
+                if (cat === "ประเภทเอกสารภายใน" || cat === "ประเภทเอกสารภายนอก") {
+                    return docDeptName === deptName && docMappedCat === cat;
+                }
+                // Case: Other miscellaneous documents count together but exclude Internal/External to avoid interference
+                return docDeptName === deptName && (docMappedCat !== "ประเภทเอกสารภายใน" && docMappedCat !== "ประเภทเอกสารภายนอก");
             })
                 .map((d) => parseSeq(d.docNo, pattern))
                 .filter((n) => n !== null);

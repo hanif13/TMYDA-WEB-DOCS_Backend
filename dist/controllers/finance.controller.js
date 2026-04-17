@@ -36,22 +36,33 @@ const createTransaction = (req, res) => __awaiter(void 0, void 0, void 0, functi
     try {
         const { date, type, departmentId, category, amount, title, thaiYear, year: yearBody, docRef, projectId, months, note } = req.body;
         const file = req.file;
+        console.log("Create Transaction - Body:", req.body);
+        console.log("Create Transaction - File:", file ? { name: file.originalname, size: file.size, mimetype: file.mimetype } : "No file");
         let slipUrl = "";
         if (file) {
-            const extension = file.originalname.split('.').pop();
-            const fileName = `fin-${Date.now()}-${Math.round(Math.random() * 1e9)}.${extension}`;
-            const { data, error } = yield supabase_1.supabaseAdmin.storage
-                .from('uploads')
-                .upload(`finance/${fileName}`, file.buffer, {
-                contentType: file.mimetype,
-                upsert: true
-            });
-            if (error)
-                throw error;
-            const { data: { publicUrl } } = supabase_1.supabaseAdmin.storage
-                .from('uploads')
-                .getPublicUrl(`finance/${fileName}`);
-            slipUrl = publicUrl;
+            try {
+                const extension = file.originalname.split('.').pop();
+                const fileName = `fin-${Date.now()}-${Math.round(Math.random() * 1e9)}.${extension}`;
+                const { data, error } = yield supabase_1.supabaseAdmin.storage
+                    .from('uploads')
+                    .upload(`finance/${fileName}`, file.buffer, {
+                    contentType: file.mimetype,
+                    upsert: true
+                });
+                if (error) {
+                    console.error("Supabase Storage Error:", error);
+                    throw error;
+                }
+                const { data: { publicUrl } } = supabase_1.supabaseAdmin.storage
+                    .from('uploads')
+                    .getPublicUrl(`finance/${fileName}`);
+                slipUrl = publicUrl;
+                console.log("Uploaded Slip URL:", slipUrl);
+            }
+            catch (storageErr) {
+                console.error("Storage Processing Failed:", storageErr);
+                return res.status(500).json({ error: "Failed to process file upload", detail: storageErr.message });
+            }
         }
         const thaiYearVal = thaiYear || yearBody;
         const transaction = yield prisma_1.prisma.transaction.create({
@@ -80,8 +91,12 @@ const createTransaction = (req, res) => __awaiter(void 0, void 0, void 0, functi
         return res.status(201).json(transaction);
     }
     catch (error) {
-        console.error("Error creating transaction:", error);
-        return res.status(500).json({ error: "Failed to create transaction" });
+        console.error("Error creating transaction (FULL DETAIL):", {
+            message: error.message,
+            stack: error.stack,
+            body: req.body
+        });
+        return res.status(500).json({ error: "Failed to create transaction", detail: error.message });
     }
 });
 exports.createTransaction = createTransaction;
@@ -145,29 +160,40 @@ const getFinanceSummary = (req, res) => __awaiter(void 0, void 0, void 0, functi
 });
 exports.getFinanceSummary = getFinanceSummary;
 const updateTransaction = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const id = req.params.id;
     try {
-        const id = req.params.id;
         const { date, type, departmentId, category, amount, title, thaiYear, docRef, projectId, months, note, recordedBy } = req.body;
         const file = req.file;
+        console.log(`Update Transaction ${id} - Body:`, req.body);
+        console.log(`Update Transaction ${id} - File:`, file ? { name: file.originalname, size: file.size } : "No file");
         const oldTx = yield prisma_1.prisma.transaction.findUnique({ where: { id } });
         if (!oldTx)
             return res.status(404).json({ error: "Transaction not found" });
         let slipUrl = oldTx.slipUrl;
         if (file) {
-            const extension = file.originalname.split('.').pop();
-            const fileName = `fin-${Date.now()}-${Math.round(Math.random() * 1e9)}.${extension}`;
-            const { data, error } = yield supabase_1.supabaseAdmin.storage
-                .from('uploads')
-                .upload(`finance/${fileName}`, file.buffer, {
-                contentType: file.mimetype,
-                upsert: true
-            });
-            if (error)
-                throw error;
-            const { data: { publicUrl } } = supabase_1.supabaseAdmin.storage
-                .from('uploads')
-                .getPublicUrl(`finance/${fileName}`);
-            slipUrl = publicUrl;
+            try {
+                const extension = file.originalname.split('.').pop();
+                const fileName = `fin-${Date.now()}-${Math.round(Math.random() * 1e9)}.${extension}`;
+                const { data, error } = yield supabase_1.supabaseAdmin.storage
+                    .from('uploads')
+                    .upload(`finance/${fileName}`, file.buffer, {
+                    contentType: file.mimetype,
+                    upsert: true
+                });
+                if (error) {
+                    console.error("Supabase Storage Error (Update):", error);
+                    throw error;
+                }
+                const { data: { publicUrl } } = supabase_1.supabaseAdmin.storage
+                    .from('uploads')
+                    .getPublicUrl(`finance/${fileName}`);
+                slipUrl = publicUrl;
+                console.log("Updated Slip URL:", slipUrl);
+            }
+            catch (storageErr) {
+                console.error("Storage Processing Failed (Update):", storageErr);
+                return res.status(500).json({ error: "Failed to process file update", detail: storageErr.message });
+            }
         }
         const transaction = yield prisma_1.prisma.transaction.update({
             where: { id },
@@ -186,8 +212,12 @@ const updateTransaction = (req, res) => __awaiter(void 0, void 0, void 0, functi
         return res.json(transaction);
     }
     catch (error) {
-        console.error("Error updating transaction:", error);
-        return res.status(500).json({ error: "Failed to update transaction" });
+        console.error("Error updating transaction (FULL DETAIL):", {
+            id,
+            message: error.message,
+            stack: error.stack
+        });
+        return res.status(500).json({ error: "Failed to update transaction", detail: error.message });
     }
 });
 exports.updateTransaction = updateTransaction;
