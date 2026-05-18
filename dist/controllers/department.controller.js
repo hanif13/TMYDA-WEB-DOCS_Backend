@@ -27,6 +27,9 @@ const getDepartments = (req, res) => __awaiter(void 0, void 0, void 0, function*
         }
         else {
             where.isCommitteeOnly = false;
+            if (year && year !== 'all') {
+                where.thaiYear = parseInt(year.toString(), 10);
+            }
         }
         const departmentsData = yield prisma_1.prisma.department.findMany({
             where,

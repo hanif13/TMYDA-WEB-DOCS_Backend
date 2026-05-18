@@ -17,6 +17,9 @@ export const getDepartments = async (req: Request, res: Response) => {
             }
         } else {
             where.isCommitteeOnly = false;
+            if (year && year !== 'all') {
+                where.thaiYear = parseInt(year.toString(), 10);
+            }
         }
 
         const departmentsData = await prisma.department.findMany({
