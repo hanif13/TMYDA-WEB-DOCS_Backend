@@ -183,3 +183,17 @@ model CommitteeMember {
 
   @@index([thaiYear])
 }
+
+model Transliteration {
+  id          String   @id @default(uuid())
+  foreign     String
+  arabic      String?
+  thai        String
+  category    String?
+  note        String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([foreign])
+  @@index([thai])
+}

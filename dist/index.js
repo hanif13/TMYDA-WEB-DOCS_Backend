@@ -19,6 +19,7 @@ const finance_routes_1 = __importDefault(require("./routes/finance.routes"));
 const committee_routes_1 = __importDefault(require("./routes/committee.routes"));
 const department_routes_1 = __importDefault(require("./routes/department.routes"));
 const upload_routes_1 = __importDefault(require("./routes/upload.routes"));
+const transliteration_routes_1 = __importDefault(require("./routes/transliteration.routes"));
 const path_1 = __importDefault(require("path"));
 const app = (0, express_1.default)();
 const PORT = process.env.PORT || 4000;
@@ -46,6 +47,7 @@ app.use('/api/finance', finance_routes_1.default);
 app.use('/api/departments', department_routes_1.default);
 app.use('/api/committee', committee_routes_1.default);
 app.use('/api/upload', upload_routes_1.default);
+app.use('/api/transliteration', transliteration_routes_1.default);
 // Serve static files from uploads folder
 app.use('/uploads', express_1.default.static(path_1.default.join(process.cwd(), 'uploads')));
 // Global Error Handler

@@ -21,7 +21,7 @@ exports.ORG_PREFIX_BY_DEPT = {
     "สมาคมพัฒนาเยาวชนมุสลิมไทย": "ที่ สพยท.",
     "สำนักกิจการสตรี สมาคมฯ": "ที่ สพยท.",
     "สำนักกิจการสตรี": "ที่ สพยท.",
-    "กรรมการที่ปรึกษา(ชูรอ)": "ที่ ชร.ฟฮ",
+    "กรรมการที่ปรึกษา (ชูรอ)": "ที่ ชร.ฟฮ",
 };
 exports.CATEGORY_MAP = {
     "ใบโครงการ": "ประเภทเอกสารโครงการ",
@@ -66,13 +66,14 @@ function generateNextDocNo(deptName_1, categoryName_1) {
             const match = docNo.match(pattern);
             return match ? parseInt(match[1], 10) : null;
         };
+        const prefix = exports.ORG_PREFIX_BY_DEPT[deptName] || "ที่ ฟฮ";
+        const sharedDepts = Object.keys(exports.ORG_PREFIX_BY_DEPT).filter(k => exports.ORG_PREFIX_BY_DEPT[k] === prefix);
         const patternPrefixMap = {
             "ประเภทเอกสารโครงการ": new RegExp(`^โครงการที่\\s*(\\d+)\\s*/\\s*${year}$`),
             "ประเภทเอกสารรายงานผลการดำเนินโครงการ": new RegExp(`^รายงานโครงการที่\\s*(\\d+)\\s*/\\s*${year}$`),
             "ประเภทเอกสารประกาศหรือคำสั่ง": new RegExp(`^ประกาศหรือคำสั่งที่\\s*(\\d+)\\s*/\\s*${year}$`)
         };
         const pattern = patternPrefixMap[cat] || (() => {
-            const prefix = exports.ORG_PREFIX_BY_DEPT[deptName] || "ที่ ฟฮ";
             const escapedPrefix = prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
             return new RegExp(`^${escapedPrefix}\\s*(?:\\s|\\.|\\-)?\\s*(\\d+)\\s*/\\s*${year}$`);
         })();
@@ -82,24 +83,17 @@ function generateNextDocNo(deptName_1, categoryName_1) {
             const docDeptName = ((_a = d.department) === null || _a === void 0 ? void 0 : _a.name) || "";
             const docCatName = ((_b = d.category) === null || _b === void 0 ? void 0 : _b.name) || "";
             const docMappedCat = exports.CATEGORY_MAP[docCatName] || docCatName;
-            // Strict department match
-            const isDeptMatch = docDeptName === deptName;
             if (cat === "ประเภทเอกสารโครงการ" || cat === "ประเภทเอกสารรายงานผลการดำเนินโครงการ") {
                 // Global sequences
                 return docMappedCat === cat;
             }
+            // For all other categories, group by prefix (shared among departments using same prefix)
+            const isSharedPrefixDept = sharedDepts.includes(docDeptName);
             if (cat === "ประเภทเอกสารประกาศหรือคำสั่ง") {
-                const isSharedDept = ["สมาคมพัฒนาเยาวชนมุสลิมไทย", "สำนักกิจการสตรี สมาคมฯ"].includes(deptName);
-                if (isSharedDept) {
-                    return ["สมาคมพัฒนาเยาวชนมุสลิมไทย", "สำนักกิจการสตรี สมาคมฯ"].includes(docDeptName) && docMappedCat === cat;
-                }
-                return isDeptMatch && docMappedCat === cat;
+                return isSharedPrefixDept && docMappedCat === cat;
             }
-            if (cat === "ประเภทเอกสารภายใน" || cat === "ประเภทเอกสารภายนอก") {
-                return isDeptMatch && docMappedCat === cat;
-            }
-            // Other miscellaneous (count together but exclude known separate categories)
-            return isDeptMatch && !["ประเภทเอกสารภายใน", "ประเภทเอกสารภายนอก", "ประเภทเอกสารประกาศหรือคำสั่ง"].includes(docMappedCat);
+            // For all other categories, strictly separate by category
+            return isSharedPrefixDept && docMappedCat === cat;
         })
             .map((d) => {
             var _a, _b;

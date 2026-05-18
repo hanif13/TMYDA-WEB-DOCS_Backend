@@ -16,6 +16,7 @@ import financeRoutes from './routes/finance.routes';
 import committeeRoutes from './routes/committee.routes';
 import departmentRoutes from './routes/department.routes';
 import uploadRoutes from './routes/upload.routes';
+import transliterationRoutes from './routes/transliteration.routes';
 import path from 'path';
 
 
@@ -49,6 +50,7 @@ app.use('/api/finance', financeRoutes);
 app.use('/api/departments', departmentRoutes);
 app.use('/api/committee', committeeRoutes);
 app.use('/api/upload', uploadRoutes);
+app.use('/api/transliteration', transliterationRoutes);
 
 // Serve static files from uploads folder
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
