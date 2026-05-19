@@ -136,6 +136,8 @@ model Project {
   actualBudget         Float?
   actualDate           String?
   actualBudgetExternal Float         @default(0)
+  projectNumber        String?
+  announcementDoc      String?
   documents            Document[]
   annualPlan           AnnualPlan    @relation(fields: [annualPlanId], references: [id])
   department           Department    @relation(fields: [departmentId], references: [id])

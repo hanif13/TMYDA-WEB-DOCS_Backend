@@ -59,7 +59,7 @@ const getAnnualYears = (req, res) => __awaiter(void 0, void 0, void 0, function*
 exports.getAnnualYears = getAnnualYears;
 const createProject = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const { name, departmentId, subDepartment, projectType, lead, budget, quarter, annualPlanId, months, isUnplanned } = req.body;
+        const { name, departmentId, subDepartment, projectType, lead, budget, quarter, annualPlanId, months, isUnplanned, projectNumber, announcementDoc } = req.body;
         const newProject = yield prisma_1.prisma.project.create({
             data: {
                 name,
@@ -73,7 +73,9 @@ const createProject = (req, res) => __awaiter(void 0, void 0, void 0, function* 
                 months: months || [],
                 isUnplanned: Boolean(isUnplanned),
                 isStarted: Boolean(isUnplanned), // Unplanned projects start immediately
-                status: isUnplanned ? 'in_progress' : 'planned'
+                status: isUnplanned ? 'in_progress' : 'planned',
+                projectNumber: projectNumber || null,
+                announcementDoc: announcementDoc || null
             },
             include: {
                 department: true
@@ -138,6 +140,8 @@ const updateProject = (req, res) => __awaiter(void 0, void 0, void 0, function* 
         const actualBudget = data.actualBudget;
         const actualBudgetExternal = data.actualBudgetExternal;
         const isUnplanned = data.isUnplanned;
+        const projectNumber = data.projectNumber;
+        const announcementDoc = data.announcementDoc;
         let months = data.months;
         if (typeof months === 'string') {
             try {
@@ -194,7 +198,7 @@ const updateProject = (req, res) => __awaiter(void 0, void 0, void 0, function* 
         }
         const updated = yield prisma_1.prisma.project.update({
             where: { id },
-            data: Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign({}, (name && { name })), (departmentId && { departmentId })), (subDepartment !== undefined && { subDepartment })), (projectType && { projectType })), (lead && { lead })), (budget !== undefined && { budget: Number(budget) })), (quarter !== undefined && { quarter: Number(quarter) })), (months !== undefined && { months })), (completedMonths !== undefined && { completedMonths })), (isStarted !== undefined && { isStarted: String(isStarted) === 'true' })), (status && { status })), (budgetUsed !== undefined && { budgetUsed: Number(budgetUsed) })), (description !== undefined && { description })), (kpi !== undefined && { kpi })), (targetPax !== undefined && { targetPax: Number(targetPax) })), (actualPax !== undefined && { actualPax: Number(actualPax) })), (actualDate !== undefined && { actualDate })), (actualBudget !== undefined && { actualBudget: Number(actualBudget) })), (actualBudgetExternal !== undefined && { actualBudgetExternal: Number(actualBudgetExternal) })), (isUnplanned !== undefined && { isUnplanned: String(isUnplanned) === 'true' })), (bodySummaryImages && { summaryImages: bodySummaryImages })), (summaryImages && {
+            data: Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign({}, (name && { name })), (departmentId && { departmentId })), (subDepartment !== undefined && { subDepartment })), (projectType && { projectType })), (lead && { lead })), (budget !== undefined && { budget: Number(budget) })), (quarter !== undefined && { quarter: Number(quarter) })), (months !== undefined && { months })), (completedMonths !== undefined && { completedMonths })), (isStarted !== undefined && { isStarted: String(isStarted) === 'true' })), (status && { status })), (budgetUsed !== undefined && { budgetUsed: Number(budgetUsed) })), (description !== undefined && { description })), (kpi !== undefined && { kpi })), (targetPax !== undefined && { targetPax: Number(targetPax) })), (actualPax !== undefined && { actualPax: Number(actualPax) })), (actualDate !== undefined && { actualDate })), (actualBudget !== undefined && { actualBudget: Number(actualBudget) })), (actualBudgetExternal !== undefined && { actualBudgetExternal: Number(actualBudgetExternal) })), (isUnplanned !== undefined && { isUnplanned: String(isUnplanned) === 'true' })), (projectNumber !== undefined && { projectNumber: projectNumber || null })), (announcementDoc !== undefined && { announcementDoc: announcementDoc || null })), (bodySummaryImages && { summaryImages: bodySummaryImages })), (summaryImages && {
                 summaryImages: {
                     push: summaryImages
                 }
@@ -304,6 +308,8 @@ const createProjectBulk = (req, res) => __awaiter(void 0, void 0, void 0, functi
                 isUnplanned: Boolean(p.isUnplanned),
                 isStarted: Boolean(p.isUnplanned),
                 status: p.isUnplanned ? 'in_progress' : 'planned',
+                projectNumber: p.projectNumber ? String(p.projectNumber) : null,
+                announcementDoc: p.announcementDoc ? String(p.announcementDoc) : null
             };
         });
         const result = yield prisma_1.prisma.project.createMany({

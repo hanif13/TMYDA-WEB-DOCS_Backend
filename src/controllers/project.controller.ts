@@ -47,7 +47,7 @@ export const getAnnualYears = async (req: Request, res: Response) => {
 
 export const createProject = async (req: Request, res: Response) => {
     try {
-        const { name, departmentId, subDepartment, projectType, lead, budget, quarter, annualPlanId, months, isUnplanned } = req.body;
+        const { name, departmentId, subDepartment, projectType, lead, budget, quarter, annualPlanId, months, isUnplanned, projectNumber, announcementDoc } = req.body;
         
         const newProject = await prisma.project.create({
             data: {
@@ -62,7 +62,9 @@ export const createProject = async (req: Request, res: Response) => {
                 months: months || [],
                 isUnplanned: Boolean(isUnplanned),
                 isStarted: Boolean(isUnplanned), // Unplanned projects start immediately
-                status: isUnplanned ? 'in_progress' : 'planned'
+                status: isUnplanned ? 'in_progress' : 'planned',
+                projectNumber: projectNumber || null,
+                announcementDoc: announcementDoc || null
             },
             include: {
                 department: true
@@ -128,6 +130,8 @@ export const updateProject = async (req: Request, res: Response) => {
         const actualBudget = data.actualBudget;
         const actualBudgetExternal = data.actualBudgetExternal;
         const isUnplanned = data.isUnplanned;
+        const projectNumber = data.projectNumber;
+        const announcementDoc = data.announcementDoc;
         
         let months = data.months;
         if (typeof months === 'string') {
@@ -203,6 +207,8 @@ export const updateProject = async (req: Request, res: Response) => {
                 ...(actualBudget !== undefined && { actualBudget: Number(actualBudget) }),
                 ...(actualBudgetExternal !== undefined && { actualBudgetExternal: Number(actualBudgetExternal) }),
                 ...(isUnplanned !== undefined && { isUnplanned: String(isUnplanned) === 'true' }),
+                ...(projectNumber !== undefined && { projectNumber: projectNumber || null }),
+                ...(announcementDoc !== undefined && { announcementDoc: announcementDoc || null }),
                 ...(bodySummaryImages && { summaryImages: bodySummaryImages }),
                 ...(summaryImages && { 
                     summaryImages: {
@@ -330,6 +336,8 @@ export const createProjectBulk = async (req: Request, res: Response) => {
                 isUnplanned: Boolean(p.isUnplanned),
                 isStarted: Boolean(p.isUnplanned),
                 status: p.isUnplanned ? 'in_progress' : 'planned',
+                projectNumber: p.projectNumber ? String(p.projectNumber) : null,
+                announcementDoc: p.announcementDoc ? String(p.announcementDoc) : null
             };
         });
 
