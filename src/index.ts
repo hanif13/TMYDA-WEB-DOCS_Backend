@@ -21,10 +21,14 @@ import path from 'path';
 
 
 
+import activityLogRoutes from './routes/activityLog.routes';
+
 const app = express();
 const PORT = process.env.PORT || 4000;
 
 // Middleware
+import { context } from './lib/context';
+
 app.use(cors({
     origin: (process.env.CORS_ORIGIN || 'http://localhost:3000').split(',').map(o => o.trim()),
     credentials: true,
@@ -34,6 +38,11 @@ app.use(cors({
 app.use(morgan('dev'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Initialize AsyncLocalStorage for every request
+app.use((req, res, next) => {
+    context.run({}, next);
+});
 
 // Health check
 app.get('/api', (req, res) => {
@@ -51,6 +60,7 @@ app.use('/api/departments', departmentRoutes);
 app.use('/api/committee', committeeRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/transliteration', transliterationRoutes);
+app.use('/api/logs', activityLogRoutes);
 
 // Serve static files from uploads folder
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));

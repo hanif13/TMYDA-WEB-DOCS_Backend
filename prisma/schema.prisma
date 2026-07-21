@@ -24,6 +24,7 @@ model User {
   documents        Document[]        @relation("DocumentUploader")
   documentRequests DocumentRequest[] @relation("UserRequests")
   department       Department?       @relation(fields: [departmentId], references: [id])
+  activityLogs     ActivityLog[]
 }
 
 model Department {
@@ -187,15 +188,30 @@ model CommitteeMember {
 }
 
 model Transliteration {
-  id          String   @id @default(uuid())
-  foreign     String
-  arabic      String?
-  thai        String
-  category    String?
-  note        String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id        String   @id @default(uuid())
+  foreign   String
+  arabic    String?
+  thai      String
+  category  String?
+  note      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([foreign])
   @@index([thai])
+}
+
+model ActivityLog {
+  id        String   @id @default(uuid())
+  userId    String? // The user who performed the action (nullable in case of system actions)
+  action    String // e.g., "CREATE", "UPDATE", "DELETE"
+  resource  String // e.g., "Document", "Transaction", "User"
+  details   Json? // Optional JSON payload with what changed or the created record
+  createdAt DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([resource])
+  @@index([createdAt])
 }

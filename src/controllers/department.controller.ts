@@ -7,15 +7,15 @@ export const getDepartments = async (req: Request, res: Response) => {
         let where: any = {};
         
         if (scope === 'committee') {
+            // Committee scope: only return departments for the exact year
+            // This completely isolates committee departments from other pages
             if (year && year !== 'all') {
                 const yearInt = parseInt(year.toString(), 10);
+                where.thaiYear = yearInt;
                 where.NOT = { hiddenInCommitteeYears: { has: yearInt } };
-                where.OR = [
-                    { thaiYear: yearInt },
-                    { isCommitteeOnly: false }
-                ];
             }
         } else {
+            // Non-committee scope: only return shared (non-committee-only) departments
             where.isCommitteeOnly = false;
             if (year && year !== 'all') {
                 where.thaiYear = parseInt(year.toString(), 10);
@@ -27,15 +27,22 @@ export const getDepartments = async (req: Request, res: Response) => {
             orderBy: [{ order: 'asc' }]
         });
 
-        // Unique filter to prevent duplicates (if any old cloned data remains)
-        const uniqueMap = new Map();
-        departmentsData.forEach(d => {
-            if (!uniqueMap.has(d.name)) {
-                uniqueMap.set(d.name, d);
-            }
-        });
+        // For non-committee scope, deduplicate by name to prevent
+        // old cloned data from showing duplicate entries.
+        // Always prefer the newest year (highest thaiYear) to get the most up-to-date subDepts.
+        if (scope !== 'committee') {
+            const uniqueMap = new Map();
+            departmentsData.forEach(d => {
+                if (!uniqueMap.has(d.name) || uniqueMap.get(d.name).thaiYear < d.thaiYear) {
+                    uniqueMap.set(d.name, d);
+                }
+            });
+            const result = Array.from(uniqueMap.values()).sort((a, b) => a.order - b.order);
+            return res.json(result);
+        }
         
-        return res.json(Array.from(uniqueMap.values()));
+        // Committee scope: no dedup needed (DB unique constraint handles it)
+        return res.json(departmentsData);
     } catch (error) {
         console.error("Error fetching departments:", error);
         return res.status(500).json({ error: "Failed to fetch departments" });
@@ -45,17 +52,29 @@ export const getDepartments = async (req: Request, res: Response) => {
 export const createDepartment = async (req: Request, res: Response) => {
     try {
         const { name, subDepts, theme, order, thaiYear, isCommitteeOnly } = req.body;
-        const department = await prisma.department.create({
-            data: {
+        const yearInt = thaiYear ? parseInt(thaiYear.toString()) : 2567;
+        const isCommittee = isCommitteeOnly === true || isCommitteeOnly === 'true';
+
+        // Use upsert to prevent UniqueConstraint error when auto-creating from CSV
+        const department = await prisma.department.upsert({
+            where: {
+                name_thaiYear: {
+                    name,
+                    thaiYear: yearInt,
+                }
+            },
+            update: {}, // Do nothing if it already exists
+            create: {
                 name,
                 subDepts: subDepts || [],
                 theme: theme || null,
                 order: order ? parseInt(order.toString()) : 0,
-                thaiYear: thaiYear ? parseInt(thaiYear.toString()) : 2567,
-                isCommitteeOnly: isCommitteeOnly === true || isCommitteeOnly === 'true'
+                thaiYear: yearInt,
+                isCommitteeOnly: isCommittee
             }
         });
-        return res.status(201).json(department);
+        
+        return res.status(200).json(department);
     } catch (error) {
         console.error("Error creating department:", error);
         return res.status(500).json({ error: "Failed to create department" });

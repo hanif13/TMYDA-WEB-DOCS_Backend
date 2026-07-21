@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 
 import { prisma } from '../lib/prisma';
+import { context } from '../lib/context';
 
 // Extend Express Request to include user
 export interface AuthRequest extends Request {
@@ -46,6 +47,12 @@ export const authenticateToken = async (req: AuthRequest, res: Response, next: N
             role: userInDb.role,
             permissions: userInDb.permissions
         };
+        
+        const store = context.getStore();
+        if (store) {
+            store.userId = userInDb.id;
+            store.username = userInDb.username;
+        }
         
         next();
     } catch (err) {
