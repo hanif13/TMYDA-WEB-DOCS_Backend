@@ -141,6 +141,7 @@ export const deleteDepartment = async (req: Request, res: Response) => {
 export const reorderDepartments = async (req: Request, res: Response) => {
     try {
         const { orders } = req.body; // Array of { id, order }
+        console.log("REORDER DEPARTMENTS CALLED:", orders);
         
         if (!Array.isArray(orders)) {
             return res.status(400).json({ error: "Invalid orders format" });
