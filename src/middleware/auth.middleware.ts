@@ -57,7 +57,7 @@ export const authenticateToken = async (req: AuthRequest, res: Response, next: N
         next();
     } catch (err) {
         console.error('JWT verification error:', err);
-        return res.status(403).json({ error: 'เซสชันหมดอายุหรือไม่มีสิทธิ์การเข้าถึง' });
+        return res.status(401).json({ error: 'เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่' });
     }
 };
 
