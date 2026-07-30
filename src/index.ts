@@ -22,6 +22,8 @@ import path from 'path';
 
 
 import activityLogRoutes from './routes/activityLog.routes';
+import eventRoutes from './routes/event.routes';
+import memberRoutes from './routes/member.routes';
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -61,6 +63,8 @@ app.use('/api/committee', committeeRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/transliteration', transliterationRoutes);
 app.use('/api/logs', activityLogRoutes);
+app.use('/api/events', eventRoutes);
+app.use('/api/members', memberRoutes);
 
 // Serve static files from uploads folder
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));

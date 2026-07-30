@@ -41,6 +41,7 @@ model Department {
   hiddenInCommitteeYears Int[]             @default([])
   committeeMembers       CommitteeMember[]
   documents              Document[]
+  events                 Event[]
   projects               Project[]
   transactions           Transaction[]
   users                  User[]
@@ -215,3 +216,74 @@ model ActivityLog {
   @@index([resource])
   @@index([createdAt])
 }
+
+model Event {
+  id           String     @id @default(uuid())
+  title        String
+  departmentId String
+  date         DateTime
+  endDate      DateTime?
+  location     String?
+  description  String?
+  color        String?
+  thaiYear     Int        @default(2569)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  department   Department @relation(fields: [departmentId], references: [id])
+
+  @@index([thaiYear])
+  @@index([date])
+}
+
+model Member {
+  id               String    @id @default(uuid())
+
+  // 1. ข้อมูลส่วนตัว
+  fullName         String                          // ชื่อ-สกุล
+  nickname         String?                         // ชื่อเล่น
+  birthDate        DateTime?                       // วัน/เดือน/ปีเกิด
+  age              Int?                            // อายุ
+  bloodType        String?                         // กรุ๊ปเลือด
+
+  // 2. ข้อมูลติดต่อ
+  address          String?                         // ที่อยู่ตามทะเบียนบ้าน
+  phoneNumber      String                          // เบอร์โทรติดต่อ
+  email            String?                         // E-mail
+  facebook         String?                         // Facebook
+  lineId           String?                         // ID Line
+  emergencyContact String?                         // ข้อมูลคนที่สามารถติดต่อได้ยามฉุกเฉิน
+
+  // 3. การศึกษา
+  education        String?                         // สำเร็จการศึกษาสูงสุด
+  institution      String?                         // ชื่อสถานศึกษา/สถาบัน
+  fieldOfStudy     String?                         // สายการเรียน/คณะ/สาขาวิชา
+
+  // 4. อาชีพ/ข้อมูลครอบครัว
+  occupation       String?                         // อาชีพปัจจุบัน
+  workplace        String?                         // ชื่อสถานประกอบการ/สถานศึกษา
+  workProvince     String?                         // จังหวัด สถานศึกษาหรือที่ทำงาน
+  maritalStatus    String?                         // สถานะ: โสด, แต่งงานแล้ว, หย่าร้าง
+  childrenBoys     Int?                            // จำนวนลูกชาย
+  childrenGirls    Int?                            // จำนวนลูกหญิง
+  childrenAges     String?                         // อายุปัจจุบันของลูก
+
+  // 5. ความเกี่ยวข้องกับกลุ่มองค์กร
+  knowFrom         String?                         // รู้จักกลุ่มองค์กรจากไหน
+  activities       Json?                           // เคยเข้าร่วมกิจกรรมใดบ้าง (JSON)
+
+  // 6. ข้อมูลเพิ่มเติม
+  skills           String?                         // ทักษะหรือความสามารถพิเศษ
+  interests        String?                         // ความสนใจพิเศษ
+
+  // ระบบ
+  status           String    @default("รอตรวจสอบ")  // สถานะการอนุมัติ
+  note             String?                         // หมายเหตุจาก Admin
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([status])
+  @@index([createdAt])
+  @@index([workProvince])
+}
+
