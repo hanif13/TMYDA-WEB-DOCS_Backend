@@ -1,5 +1,7 @@
 import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
+import { supabaseAdmin } from '../lib/supabase';
+import path from 'path';
 
 // ─── PUBLIC: Register a new member (No Auth Required) ─────────
 export const registerMember = async (req: Request, res: Response) => {
@@ -45,6 +47,42 @@ export const registerMember = async (req: Request, res: Response) => {
             });
         }
 
+        // Parse activities if it's a string (from FormData)
+        let parsedActivities = activities;
+        if (typeof activities === 'string') {
+            try {
+                parsedActivities = JSON.parse(activities);
+            } catch {
+                parsedActivities = null;
+            }
+        }
+
+        // Handle photo upload to Supabase Storage
+        let photoUrl: string | null = null;
+        const file = (req as any).file as Express.Multer.File | undefined;
+        if (file) {
+            const ext = path.extname(file.originalname);
+            const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+            const fileName = `member-${uniqueSuffix}${ext}`;
+
+            const { data, error } = await supabaseAdmin.storage
+                .from('uploads')
+                .upload(`members/${fileName}`, file.buffer, {
+                    contentType: file.mimetype,
+                    upsert: true
+                });
+
+            if (error) {
+                console.error('Supabase upload error for member photo:', error);
+                // Don't fail the whole registration, just skip the photo
+            } else {
+                const { data: { publicUrl } } = supabaseAdmin.storage
+                    .from('uploads')
+                    .getPublicUrl(`members/${fileName}`);
+                photoUrl = publicUrl;
+            }
+        }
+
         const member = await prisma.member.create({
             data: {
                 fullName,
@@ -69,9 +107,10 @@ export const registerMember = async (req: Request, res: Response) => {
                 childrenGirls: childrenGirls != null ? parseInt(childrenGirls) : null,
                 childrenAges: childrenAges || null,
                 knowFrom: knowFrom || null,
-                activities: activities || null,
+                activities: parsedActivities || null,
                 skills: skills || null,
                 interests: interests || null,
+                photoUrl,
                 status: 'รอตรวจสอบ'
             }
         });

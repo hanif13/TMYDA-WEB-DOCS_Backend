@@ -276,6 +276,9 @@ model Member {
   skills           String?                         // ทักษะหรือความสามารถพิเศษ
   interests        String?                         // ความสนใจพิเศษ
 
+  // 7. รูปโปรไฟล์
+  photoUrl         String?                         // รูปภาพ (ไม่บังคับ)
+
   // ระบบ
   status           String    @default("รอตรวจสอบ")  // สถานะการอนุมัติ
   note             String?                         // หมายเหตุจาก Admin
