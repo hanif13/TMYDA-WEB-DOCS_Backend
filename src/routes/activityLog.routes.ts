@@ -1,10 +1,10 @@
 import express from 'express';
 import { getActivityLogs } from '../controllers/activityLog.controller';
-import { authenticateToken, authorizeAdmin } from '../middleware/auth.middleware';
+import { authenticateToken, authorizePermission } from '../middleware/auth.middleware';
 
 const router = express.Router();
 
-// Only SUPER_ADMIN and ADMIN can view logs (authorizeAdmin handles this)
-router.get('/', authenticateToken, authorizeAdmin, getActivityLogs);
+// Only users with activity_logs.view permission can view logs
+router.get('/', authenticateToken, authorizePermission('activity_logs.view') as any, getActivityLogs);
 
 export default router;

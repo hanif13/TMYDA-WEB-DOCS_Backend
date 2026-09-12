@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { getDocumentRequests, createDocumentRequest, updateDocumentRequest, deleteDocumentRequest } from '../controllers/documentRequest.controller';
-import { authenticateToken, authorizeAdmin } from '../middleware/auth.middleware';
+import { authenticateToken } from '../middleware/auth.middleware';
 
 const router = Router();
 

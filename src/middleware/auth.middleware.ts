@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 
 import { prisma } from '../lib/prisma';
 import { context } from '../lib/context';
+import { hasPermission as checkPermission } from '../config/permissions.config';
 
 // Extend Express Request to include user
 export interface AuthRequest extends Request {
@@ -61,22 +62,27 @@ export const authenticateToken = async (req: AuthRequest, res: Response, next: N
     }
 };
 
-// Allow SUPER_ADMIN and ADMIN
+// Allow SUPER_ADMIN and ADMIN (backward compatible)
 export const authorizeAdmin = async (req: AuthRequest, res: Response, next: NextFunction) => {
     const user = req.user;
-    if (user?.role !== 'ADMIN' && user?.role !== 'SUPER_ADMIN') {
-        return res.status(403).json({ error: 'คุณไม่มีสิทธิ์ในการดำเนินการนี้ (Admin Only)' });
+    // Backward compatible: check role OR granular permissions
+    if (user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN') {
+        return next();
     }
-    next();
+    return res.status(403).json({ error: 'คุณไม่มีสิทธิ์ในการดำเนินการนี้ (Admin Only)' });
 };
 
 // Allow SUPER_ADMIN and FINANCE for finance write operations
 export const authorizeFinance = async (req: AuthRequest, res: Response, next: NextFunction) => {
     const user = req.user;
-    if (user?.role !== 'FINANCE' && user?.role !== 'SUPER_ADMIN') {
-        return res.status(403).json({ error: 'คุณไม่มีสิทธิ์ในการดำเนินการนี้ (Finance Only)' });
+    if (user?.role === 'FINANCE' || user?.role === 'SUPER_ADMIN') {
+        return next();
     }
-    next();
+    // Also check granular permission
+    if (user?.permissions && checkPermission(user.permissions, 'income_expense.edit')) {
+        return next();
+    }
+    return res.status(403).json({ error: 'คุณไม่มีสิทธิ์ในการดำเนินการนี้ (Finance Only)' });
 };
 
 // Allow SUPER_ADMIN only
@@ -88,12 +94,22 @@ export const authorizeSuperAdmin = async (req: AuthRequest, res: Response, next:
     next();
 };
 
+// Granular permission check — checks user.permissions array
 export const authorizePermission = (permission: string) => {
     return async (req: AuthRequest, res: Response, next: NextFunction) => {
         const user = req.user;
-        if (!user?.permissions.includes(permission) && user?.role !== 'SUPER_ADMIN') {
-            return res.status(403).json({ error: `คุณไม่มีสิทธิ์ในการเข้าถึง (${permission})` });
+        if (!user) {
+            return res.status(401).json({ error: 'กรุณาเข้าสู่ระบบก่อน' });
         }
-        next();
+        // SUPER_ADMIN always passes
+        if (user.role === 'SUPER_ADMIN') {
+            return next();
+        }
+        // Check granular permissions
+        if (checkPermission(user.permissions, permission)) {
+            return next();
+        }
+        return res.status(403).json({ error: `คุณไม่มีสิทธิ์ในการเข้าถึง (${permission})` });
     };
 };
+

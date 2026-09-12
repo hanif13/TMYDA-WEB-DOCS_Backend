@@ -7,18 +7,18 @@ import {
     createCommitteeBulk,
     reorderCommitteeMembers
 } from '../controllers/committee.controller';
-import { authenticateToken, authorizeAdmin } from '../middleware/auth.middleware';
+import { authenticateToken, authorizePermission } from '../middleware/auth.middleware';
 import { upload } from '../middleware/upload';
 
 const router = Router();
 
 router.get('/', authenticateToken as any, getCommitteeMembers);
-router.post('/bulk', authenticateToken as any, authorizeAdmin as any, createCommitteeBulk);
-router.put('/reorder', authenticateToken as any, authorizeAdmin as any, reorderCommitteeMembers);
+router.post('/bulk', authenticateToken as any, authorizePermission('committee.edit') as any, createCommitteeBulk);
+router.put('/reorder', authenticateToken as any, authorizePermission('committee.edit') as any, reorderCommitteeMembers);
 
 // Handle single image upload for committee member
-router.post('/', authenticateToken as any, authorizeAdmin as any, upload.single('image'), createCommitteeMember);
-router.patch('/:id', authenticateToken as any, authorizeAdmin as any, upload.single('image'), updateCommitteeMember);
-router.delete('/:id', authenticateToken as any, authorizeAdmin as any, deleteCommitteeMember);
+router.post('/', authenticateToken as any, authorizePermission('committee.edit') as any, upload.single('image'), createCommitteeMember);
+router.patch('/:id', authenticateToken as any, authorizePermission('committee.edit') as any, upload.single('image'), updateCommitteeMember);
+router.delete('/:id', authenticateToken as any, authorizePermission('committee.edit') as any, deleteCommitteeMember);
 
 export default router;

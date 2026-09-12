@@ -4,6 +4,7 @@ import { prisma } from '../lib/prisma';
 import bcrypt from 'bcryptjs';
 import { AuthRequest } from '../middleware/auth.middleware';
 import { parse } from 'csv-parse/sync';
+import { getDefaultPermissions, PERMISSION_CATALOG, ROLE_PRESETS } from '../config/permissions.config';
 
 // Valid roles
 const VALID_ROLES = ['SUPER_ADMIN', 'ADMIN', 'FINANCE', 'VIEWER'];
@@ -90,7 +91,7 @@ export const getProfile = async (req: AuthRequest, res: Response) => {
 
 export const createUser = async (req: Request, res: Response) => {
     try {
-        const { username, password, role, name, department, departmentId: bodyDeptId, email, phoneNumber, facebook, subDepartment } = req.body;
+        const { username, password, role, permissions, name, department, departmentId: bodyDeptId, email, phoneNumber, facebook, subDepartment } = req.body;
         const targetRole = role || 'VIEWER';
 
         // Validate role
@@ -129,7 +130,7 @@ export const createUser = async (req: Request, res: Response) => {
                 phoneNumber: phoneNumber || null,
                 subDepartment: subDepartment || null,
                 facebook: facebook || null,
-                permissions: targetRole === 'SUPER_ADMIN' ? ['all'] : ['VIEW']
+                permissions: (permissions && Array.isArray(permissions)) ? permissions : getDefaultPermissions(targetRole)
             },
             include: { department: true }
         });
@@ -147,7 +148,7 @@ export const createUser = async (req: Request, res: Response) => {
 export const updateUser = async (req: Request, res: Response) => {
     try {
         const id = req.params.id as string;
-        const { username, password, role, name, department, departmentId: bodyDeptId, email, phoneNumber, facebook, subDepartment } = req.body;
+        const { username, password, role, permissions, name, department, departmentId: bodyDeptId, email, phoneNumber, facebook, subDepartment } = req.body;
         
         let updateData: any = {};
         if (username) updateData.username = username;
@@ -172,9 +173,14 @@ export const updateUser = async (req: Request, res: Response) => {
                     }
                 }
             }
-
             updateData.role = role;
-            updateData.permissions = role === 'SUPER_ADMIN' ? ['all'] : ['VIEW'];
+        }
+
+        // If permissions provided explicitly, use them; otherwise default from role
+        if (permissions && Array.isArray(permissions)) {
+            updateData.permissions = permissions;
+        } else if (role) {
+            updateData.permissions = getDefaultPermissions(role);
         }
         
         const deptToUse = bodyDeptId || department;
@@ -395,7 +401,7 @@ export const bulkUploadUsers = async (req: Request, res: Response) => {
                 }
 
                 const passwordHash = await bcrypt.hash(password, 10);
-                const permissions = targetRole === 'SUPER_ADMIN' ? ['all'] : ['VIEW'];
+                const permissions = getDefaultPermissions(targetRole);
 
                 // Check for existing user
                 const existingUser = await prisma.user.findUnique({ where: { username } });
@@ -450,5 +456,18 @@ export const bulkUploadUsers = async (req: Request, res: Response) => {
     } catch (error) {
         console.error("Bulk upload error:", error);
         return res.status(500).json({ error: "การอัปโหลดไฟล์ล้มเหลว" });
+    }
+};
+
+// ═══ Get Permissions Catalog (for frontend UI) ═══
+export const getPermissionsCatalog = async (_req: Request, res: Response) => {
+    try {
+        return res.json({
+            catalog: PERMISSION_CATALOG,
+            rolePresets: ROLE_PRESETS,
+        });
+    } catch (error) {
+        console.error('Error fetching permissions catalog:', error);
+        return res.status(500).json({ error: 'Failed to fetch permissions catalog' });
     }
 };

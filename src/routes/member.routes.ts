@@ -9,7 +9,7 @@ import {
     updateMemberStatus,
     deleteMember
 } from '../controllers/member.controller';
-import { authenticateToken, authorizeAdmin } from '../middleware/auth.middleware';
+import { authenticateToken, authorizePermission } from '../middleware/auth.middleware';
 
 const router = Router();
 
@@ -31,11 +31,11 @@ const memberUpload = multer({
 // ─── PUBLIC ROUTE (No Auth) ──────────────────────────────────
 router.post('/register', memberUpload.single('photo'), registerMember);
 
-// ─── PROTECTED ROUTES (Admin Only) ───────────────────────────
-router.get('/', authenticateToken as any, authorizeAdmin as any, getMembers);
-router.get('/stats', authenticateToken as any, authorizeAdmin as any, getMemberStats);
-router.get('/:id', authenticateToken as any, authorizeAdmin as any, getMemberById);
-router.patch('/:id/status', authenticateToken as any, authorizeAdmin as any, updateMemberStatus);
-router.delete('/:id', authenticateToken as any, authorizeAdmin as any, deleteMember);
+// ─── PROTECTED ROUTES ───────────────────────────
+router.get('/', authenticateToken as any, authorizePermission('members.view') as any, getMembers);
+router.get('/stats', authenticateToken as any, authorizePermission('members.view') as any, getMemberStats);
+router.get('/:id', authenticateToken as any, authorizePermission('members.view') as any, getMemberById);
+router.patch('/:id/status', authenticateToken as any, authorizePermission('members.edit') as any, updateMemberStatus);
+router.delete('/:id', authenticateToken as any, authorizePermission('members.edit') as any, deleteMember);
 
 export default router;
